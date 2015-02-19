@@ -1,0 +1,466 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		9A8C26751977253900972F12 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26741977253900972F12 /* Foundation.framework */; };
+		9A8C26771977253900972F12 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26761977253900972F12 /* CoreGraphics.framework */; };
+		9A8C26791977253900972F12 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26781977253900972F12 /* UIKit.framework */; };
+		9A8C267F1977253900972F12 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A8C267D1977253900972F12 /* InfoPlist.strings */; };
+		9A8C26851977253900972F12 /* STLAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A8C26841977253900972F12 /* STLAppDelegate.m */; };
+		9A8C26871977253900972F12 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9A8C26861977253900972F12 /* Images.xcassets */; };
+		9A8C268E1977253900972F12 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C268D1977253900972F12 /* XCTest.framework */; };
+		9A8C268F1977253900972F12 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26741977253900972F12 /* Foundation.framework */; };
+		9A8C26901977253900972F12 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26781977253900972F12 /* UIKit.framework */; };
+		9A8C26981977253900972F12 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A8C26961977253900972F12 /* InfoPlist.strings */; };
+		9A8C269A1977253900972F12 /* scratch_iosTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A8C26991977253900972F12 /* scratch_iosTests.m */; };
+		9A8C26A41977258F00972F12 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9A8C26A31977258F00972F12 /* main.cpp */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9A8C26911977253900972F12 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A8C26691977253900972F12 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9A8C26701977253900972F12;
+			remoteInfo = "scratch-ios";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		9A8C26711977253900972F12 /* scratch-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "scratch-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A8C26741977253900972F12 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		9A8C26761977253900972F12 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		9A8C26781977253900972F12 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		9A8C267C1977253900972F12 /* scratch-ios-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "scratch-ios-Info.plist"; sourceTree = "<group>"; };
+		9A8C267E1977253900972F12 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		9A8C26801977253900972F12 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		9A8C26821977253900972F12 /* scratch-ios-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "scratch-ios-Prefix.pch"; sourceTree = "<group>"; };
+		9A8C26831977253900972F12 /* STLAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = STLAppDelegate.h; sourceTree = "<group>"; };
+		9A8C26841977253900972F12 /* STLAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = STLAppDelegate.m; sourceTree = "<group>"; };
+		9A8C26861977253900972F12 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
+		9A8C268C1977253900972F12 /* scratch-iosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "scratch-iosTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A8C268D1977253900972F12 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
+		9A8C26951977253900972F12 /* scratch-iosTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "scratch-iosTests-Info.plist"; sourceTree = "<group>"; };
+		9A8C26971977253900972F12 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		9A8C26991977253900972F12 /* scratch_iosTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = scratch_iosTests.m; sourceTree = "<group>"; };
+		9A8C26A31977258F00972F12 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		9A8C266E1977253900972F12 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9A8C26771977253900972F12 /* CoreGraphics.framework in Frameworks */,
+				9A8C26791977253900972F12 /* UIKit.framework in Frameworks */,
+				9A8C26751977253900972F12 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9A8C26891977253900972F12 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9A8C268E1977253900972F12 /* XCTest.framework in Frameworks */,
+				9A8C26901977253900972F12 /* UIKit.framework in Frameworks */,
+				9A8C268F1977253900972F12 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		9A8C26681977253900972F12 = {
+			isa = PBXGroup;
+			children = (
+				9A8C267A1977253900972F12 /* scratch-ios */,
+				9A8C26931977253900972F12 /* scratch-iosTests */,
+				9A8C26731977253900972F12 /* Frameworks */,
+				9A8C26721977253900972F12 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		9A8C26721977253900972F12 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9A8C26711977253900972F12 /* scratch-ios.app */,
+				9A8C268C1977253900972F12 /* scratch-iosTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9A8C26731977253900972F12 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				9A8C26741977253900972F12 /* Foundation.framework */,
+				9A8C26761977253900972F12 /* CoreGraphics.framework */,
+				9A8C26781977253900972F12 /* UIKit.framework */,
+				9A8C268D1977253900972F12 /* XCTest.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		9A8C267A1977253900972F12 /* scratch-ios */ = {
+			isa = PBXGroup;
+			children = (
+				9A8C26831977253900972F12 /* STLAppDelegate.h */,
+				9A8C26841977253900972F12 /* STLAppDelegate.m */,
+				9A8C26861977253900972F12 /* Images.xcassets */,
+				9A8C267B1977253900972F12 /* Supporting Files */,
+			);
+			path = "scratch-ios";
+			sourceTree = "<group>";
+		};
+		9A8C267B1977253900972F12 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				9A8C267C1977253900972F12 /* scratch-ios-Info.plist */,
+				9A8C267D1977253900972F12 /* InfoPlist.strings */,
+				9A8C26A31977258F00972F12 /* main.cpp */,
+				9A8C26801977253900972F12 /* main.m */,
+				9A8C26821977253900972F12 /* scratch-ios-Prefix.pch */,
+			);
+			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		9A8C26931977253900972F12 /* scratch-iosTests */ = {
+			isa = PBXGroup;
+			children = (
+				9A8C26991977253900972F12 /* scratch_iosTests.m */,
+				9A8C26941977253900972F12 /* Supporting Files */,
+			);
+			path = "scratch-iosTests";
+			sourceTree = "<group>";
+		};
+		9A8C26941977253900972F12 /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				9A8C26951977253900972F12 /* scratch-iosTests-Info.plist */,
+				9A8C26961977253900972F12 /* InfoPlist.strings */,
+			);
+			name = "Supporting Files";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		9A8C26701977253900972F12 /* scratch-ios */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9A8C269D1977253900972F12 /* Build configuration list for PBXNativeTarget "scratch-ios" */;
+			buildPhases = (
+				9A8C266D1977253900972F12 /* Sources */,
+				9A8C266E1977253900972F12 /* Frameworks */,
+				9A8C266F1977253900972F12 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "scratch-ios";
+			productName = "scratch-ios";
+			productReference = 9A8C26711977253900972F12 /* scratch-ios.app */;
+			productType = "com.apple.product-type.application";
+		};
+		9A8C268B1977253900972F12 /* scratch-iosTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9A8C26A01977253900972F12 /* Build configuration list for PBXNativeTarget "scratch-iosTests" */;
+			buildPhases = (
+				9A8C26881977253900972F12 /* Sources */,
+				9A8C26891977253900972F12 /* Frameworks */,
+				9A8C268A1977253900972F12 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9A8C26921977253900972F12 /* PBXTargetDependency */,
+			);
+			name = "scratch-iosTests";
+			productName = "scratch-iosTests";
+			productReference = 9A8C268C1977253900972F12 /* scratch-iosTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		9A8C26691977253900972F12 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				CLASSPREFIX = STL;
+				LastUpgradeCheck = 0510;
+				ORGANIZATIONNAME = Adobe;
+				TargetAttributes = {
+					9A8C26701977253900972F12 = {
+						DevelopmentTeam = FD8MZA7LCQ;
+					};
+					9A8C268B1977253900972F12 = {
+						TestTargetID = 9A8C26701977253900972F12;
+					};
+				};
+			};
+			buildConfigurationList = 9A8C266C1977253900972F12 /* Build configuration list for PBXProject "scratch-ios" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 9A8C26681977253900972F12;
+			productRefGroup = 9A8C26721977253900972F12 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9A8C26701977253900972F12 /* scratch-ios */,
+				9A8C268B1977253900972F12 /* scratch-iosTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		9A8C266F1977253900972F12 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9A8C267F1977253900972F12 /* InfoPlist.strings in Resources */,
+				9A8C26871977253900972F12 /* Images.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9A8C268A1977253900972F12 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9A8C26981977253900972F12 /* InfoPlist.strings in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		9A8C266D1977253900972F12 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9A8C26A41977258F00972F12 /* main.cpp in Sources */,
+				9A8C26851977253900972F12 /* STLAppDelegate.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9A8C26881977253900972F12 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9A8C269A1977253900972F12 /* scratch_iosTests.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9A8C26921977253900972F12 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9A8C26701977253900972F12 /* scratch-ios */;
+			targetProxy = 9A8C26911977253900972F12 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		9A8C267D1977253900972F12 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9A8C267E1977253900972F12 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		9A8C26961977253900972F12 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9A8C26971977253900972F12 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		9A8C269B1977253900972F12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 7.1;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9A8C269C1977253900972F12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 7.1;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		9A8C269E1977253900972F12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "scratch-ios/scratch-ios-Prefix.pch";
+				INFOPLIST_FILE = "scratch-ios/scratch-ios-Info.plist";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				WRAPPER_EXTENSION = app;
+			};
+			name = Debug;
+		};
+		9A8C269F1977253900972F12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "scratch-ios/scratch-ios-Prefix.pch";
+				INFOPLIST_FILE = "scratch-ios/scratch-ios-Info.plist";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				WRAPPER_EXTENSION = app;
+			};
+			name = Release;
+		};
+		9A8C26A11977253900972F12 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(BUILT_PRODUCTS_DIR)/scratch-ios.app/scratch-ios";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(SDKROOT)/Developer/Library/Frameworks",
+					"$(inherited)",
+					"$(DEVELOPER_FRAMEWORKS_DIR)",
+				);
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "scratch-ios/scratch-ios-Prefix.pch";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				INFOPLIST_FILE = "scratch-iosTests/scratch-iosTests-Info.plist";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TEST_HOST = "$(BUNDLE_LOADER)";
+				WRAPPER_EXTENSION = xctest;
+			};
+			name = Debug;
+		};
+		9A8C26A21977253900972F12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(BUILT_PRODUCTS_DIR)/scratch-ios.app/scratch-ios";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(SDKROOT)/Developer/Library/Frameworks",
+					"$(inherited)",
+					"$(DEVELOPER_FRAMEWORKS_DIR)",
+				);
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "scratch-ios/scratch-ios-Prefix.pch";
+				INFOPLIST_FILE = "scratch-iosTests/scratch-iosTests-Info.plist";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TEST_HOST = "$(BUNDLE_LOADER)";
+				WRAPPER_EXTENSION = xctest;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9A8C266C1977253900972F12 /* Build configuration list for PBXProject "scratch-ios" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A8C269B1977253900972F12 /* Debug */,
+				9A8C269C1977253900972F12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		9A8C269D1977253900972F12 /* Build configuration list for PBXNativeTarget "scratch-ios" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A8C269E1977253900972F12 /* Debug */,
+				9A8C269F1977253900972F12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+		9A8C26A01977253900972F12 /* Build configuration list for PBXNativeTarget "scratch-iosTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9A8C26A11977253900972F12 /* Debug */,
+				9A8C26A21977253900972F12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 9A8C26691977253900972F12 /* Project object */;
+}
