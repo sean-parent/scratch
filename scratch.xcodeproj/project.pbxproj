@@ -10,6 +10,11 @@
 		9AAE19E216F81487007BC561 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9AAE19E116F81487007BC561 /* main.cpp */; };
 		9AAE19E416F81487007BC561 /* scratch.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9AAE19E316F81487007BC561 /* scratch.1 */; };
 		9AC2967318D16B6800F97664 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9AC2967218D16B6800F97664 /* AppKit.framework */; };
+		9ACCBBED1A971C8D00207431 /* future.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE71A971C8D00207431 /* future.cpp */; };
+		9ACCBBEE1A971C8D00207431 /* once_atomic.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE81A971C8D00207431 /* once_atomic.cpp */; };
+		9ACCBBF01A971C8D00207431 /* thread.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEA1A971C8D00207431 /* thread.cpp */; };
+		9ACCBBF11A971C8D00207431 /* tss_null.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEC1A971C8D00207431 /* tss_null.cpp */; };
+		9ACCBBF31A971D0C00207431 /* error_code.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBF21A971D0C00207431 /* error_code.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +63,15 @@
 		9ABA64E81A05A77700E6E8E6 /* View.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = View.xib; sourceTree = "<group>"; };
 		9ABAFE9F18D1696A00652166 /* objc.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = objc.mm; sourceTree = "<group>"; };
 		9AC2967218D16B6800F97664 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
+		9ACCBBE31A971B3D00207431 /* source */ = {isa = PBXFileReference; lastKnownFileType = folder; path = source; sourceTree = "<group>"; };
+		9ACCBBE41A971B9800207431 /* config.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = config.hpp; path = ../config.hpp; sourceTree = "<group>"; };
+		9ACCBBE71A971C8D00207431 /* future.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = future.cpp; path = source/boost/thread/src/future.cpp; sourceTree = "<group>"; };
+		9ACCBBE81A971C8D00207431 /* once_atomic.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = once_atomic.cpp; path = source/boost/thread/src/pthread/once_atomic.cpp; sourceTree = "<group>"; };
+		9ACCBBE91A971C8D00207431 /* once.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = once.cpp; path = source/boost/thread/src/pthread/once.cpp; sourceTree = "<group>"; };
+		9ACCBBEA1A971C8D00207431 /* thread.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = thread.cpp; path = source/boost/thread/src/pthread/thread.cpp; sourceTree = "<group>"; };
+		9ACCBBEB1A971C8D00207431 /* timeconv.inl */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = timeconv.inl; path = source/boost/thread/src/pthread/timeconv.inl; sourceTree = "<group>"; };
+		9ACCBBEC1A971C8D00207431 /* tss_null.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = tss_null.cpp; path = source/boost/thread/src/tss_null.cpp; sourceTree = "<group>"; };
+		9ACCBBF21A971D0C00207431 /* error_code.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = error_code.cpp; path = source/boost/system/src/error_code.cpp; sourceTree = "<group>"; };
 		9AE077F0184D3DC3008C8DB6 /* includes */ = {isa = PBXFileReference; lastKnownFileType = folder; path = includes; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -119,6 +133,8 @@
 				9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */,
 				9AC2967218D16B6800F97664 /* AppKit.framework */,
 				9AAE19E016F81487007BC561 /* scratch */,
+				9ACCBBE51A971C7B00207431 /* src */,
+				9ACCBBE31A971B3D00207431 /* source */,
 				9AE077F0184D3DC3008C8DB6 /* includes */,
 				9AAE19DF16F81487007BC561 /* Products */,
 			);
@@ -135,6 +151,7 @@
 		9AAE19E016F81487007BC561 /* scratch */ = {
 			isa = PBXGroup;
 			children = (
+				9ACCBBE41A971B9800207431 /* config.hpp */,
 				9AAE19E116F81487007BC561 /* main.cpp */,
 				9A55677D1A61B7AE005386D7 /* main */,
 				9ABAFE9F18D1696A00652166 /* objc.mm */,
@@ -142,6 +159,20 @@
 				9ABA64E81A05A77700E6E8E6 /* View.xib */,
 			);
 			path = scratch;
+			sourceTree = "<group>";
+		};
+		9ACCBBE51A971C7B00207431 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				9ACCBBF21A971D0C00207431 /* error_code.cpp */,
+				9ACCBBE71A971C8D00207431 /* future.cpp */,
+				9ACCBBE81A971C8D00207431 /* once_atomic.cpp */,
+				9ACCBBE91A971C8D00207431 /* once.cpp */,
+				9ACCBBEA1A971C8D00207431 /* thread.cpp */,
+				9ACCBBEB1A971C8D00207431 /* timeconv.inl */,
+				9ACCBBEC1A971C8D00207431 /* tss_null.cpp */,
+			);
+			name = src;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -222,7 +253,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9ACCBBED1A971C8D00207431 /* future.cpp in Sources */,
 				9AAE19E216F81487007BC561 /* main.cpp in Sources */,
+				9ACCBBF31A971D0C00207431 /* error_code.cpp in Sources */,
+				9ACCBBF11A971C8D00207431 /* tss_null.cpp in Sources */,
+				9ACCBBEE1A971C8D00207431 /* once_atomic.cpp in Sources */,
+				9ACCBBF01A971C8D00207431 /* thread.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -293,6 +329,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				GCC_PREFIX_HEADER = config.hpp;
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				USER_HEADER_SEARCH_PATHS = "\"$(SRCROOT)/includes\"";
@@ -305,6 +342,7 @@
 				ALWAYS_SEARCH_USER_PATHS = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
 				GCC_OPTIMIZATION_LEVEL = 3;
+				GCC_PREFIX_HEADER = config.hpp;
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				USER_HEADER_SEARCH_PATHS = "\"$(SRCROOT)/includes\"";

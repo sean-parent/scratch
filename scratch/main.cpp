@@ -1,9 +1,353 @@
-class A;
-class B;
 
-class A {
-    friend void B::f();
+#include <utility>
+#include <iostream>
+
+using namespace std;
+
+template <typename I /* unsigned */> size_t count(I x) { size_t r{0}; while (x != 0) { x &= x - 1; ++r; } return r; }
+
+
+
+#if 1
+// GOOD for talk
+
+#include <iostream>
+#include <memory>
+#include <vector>
+
+#include <dispatch/dispatch.h>
+
+#include <boost/multiprecision/cpp_int.hpp>
+
+using namespace std;
+using namespace boost::multiprecision;
+
+template <typename T, typename N, typename O>
+T power(T x, N n, O op)
+{
+    if (n == 0) return identity_element(op);
+    
+    while ((n & 1) == 0) {
+        n >>= 1;
+        x = op(x, x);
+    }
+    
+    T result = x;
+    n >>= 1;
+    while (n != 0) {
+        x = op(x, x);
+        if ((n & 1) != 0) result = op(result, x);
+        n >>= 1;
+    }
+    return result;
+}
+
+template <typename N>
+struct multiply_2x2 {
+    array<N, 4> operator()(const array<N, 4>& x, const array<N, 4>& y)
+    {
+        return { x[0] * y[0] + x[1] * y[2], x[0] * y[1] + x[1] * y[3],
+            x[2] * y[0] + x[3] * y[2], x[2] * y[1] + x[3] * y[3] };
+    }
 };
+
+template <typename N>
+array<N, 4> identity_element(const multiply_2x2<N>&) { return { N(1), N(0), N(0), N(1) }; }
+
+template <typename R, typename N>
+R fibonacci(N n) {
+    if (n == 0) return R(0);
+    return power(array<R, 4>{ 1, 1, 1, 0 }, N(n - 1), multiply_2x2<R>())[0];
+}
+
+//--------
+
+using lock_t = unique_lock<mutex>;
+
+template <typename>
+struct result_of_;
+
+template <typename R, typename... Args>
+struct result_of_<R(Args...)> { using type = R; };
+
+template <typename F>
+using result_of_t_ = typename result_of_<F>::type;
+
+template <typename R>
+struct shared_base {
+    vector<R> _r; // optional
+    mutex _mutex;
+    condition_variable _ready;
+    vector<function<void()>> _then;
+    
+    virtual ~shared_base() { }
+    
+    template <typename F>
+    void then(F&& f) {
+        bool resolved{false};
+        {
+            lock_t lock{_mutex};
+            if (_r.empty()) _then.push_back(forward<F>(f));
+            else resolved = true;
+        }
+        if (resolved) f();
+    }
+    
+    const R& get() {
+        lock_t lock{_mutex};
+        while (_r.empty()) _ready.wait(lock);
+        return _r.back();
+    }
+};
+
+template <typename> struct shared; // not defined
+
+template <typename R, typename... Args>
+struct shared<R(Args...)> : shared_base<R> {
+    function<R(Args...)> _f;
+    
+    template<typename F>
+    shared(F&& f) : _f(forward<F>(f)) { }
+    
+    template <typename... A>
+    void operator()(A&&... args) {
+        auto r = _f(forward<A>(args)...);
+        _f = nullptr;
+        vector<function<void()>> then;
+        {
+            lock_t lock{this->_mutex};
+            this->_r.push_back(move(r));
+            swap(then, this->_then);
+        }
+        this->_ready.notify_all();
+        for (const auto& f : then) f();
+    }
+};
+
+template <typename> class packaged_task; //not defined
+template <typename> class future;
+
+template <typename S, typename F>
+auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>>;
+
+template <typename R>
+class future {
+    shared_ptr<shared_base<R>> _p;
+    
+    template <typename S, typename F>
+    friend auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>>;
+    
+    explicit future(shared_ptr<shared_base<R>> p) : _p(move(p)) { }
+ public:
+    future() = default;
+    
+    template <typename F>
+    auto then(F&& f) {
+        auto pack = package<result_of_t<F(R)>()>([p = _p, f = forward<F>(f)](){
+            return f(p->_r.back());
+        });
+        _p->then(move(pack.first));
+        return pack.second;
+    }
+    
+    const R& get() const { return _p->get(); }
+};
+
+template<typename R, typename ...Args >
+class packaged_task<R (Args...)> {
+    weak_ptr<shared<R(Args...)>> _p;
+    
+    template <typename S, typename F>
+    friend auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>>;
+    
+    explicit packaged_task(weak_ptr<shared<R(Args...)>> p) : _p(move(p)) { }
+    
+ public:
+    packaged_task() = default;
+    
+    template <typename... A>
+    void operator()(A&&... args) const {
+        auto p = _p.lock();
+        if (p) (*p)(forward<A>(args)...);
+    }
+};
+
+
+template <typename S, typename F>
+auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>> {
+    auto p = make_shared<shared<S>>(forward<F>(f));
+    return make_pair(packaged_task<S>(p), future<result_of_t_<S>>(p));
+}
+
+template <typename F, typename ...Args>
+auto async(F&& f, Args&&... args)
+{
+    using result_type = result_of_t<F (Args...)>;
+    using packaged_type = packaged_task<result_type()>;
+    
+    auto pack = package<result_type()>(bind(forward<F>(f), forward<Args>(args)...));
+    auto p = new packaged_type(move(get<0>(pack)));
+    
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+                     p, [](void* f_) {
+                         packaged_type* f = static_cast<packaged_type*>(f_);
+                         (*f)();
+                         delete f;
+                     });
+    
+    return get<1>(pack);
+}
+
+
+
+int main() {
+    //auto x = async([]{ return fibonacci<cpp_int>(1'000'000); });
+    packaged_task<int()> f;
+    
+    {
+    future<int> x;
+    tie(f, x) = package<int()>([]{ cout << "called" << endl; return 1; });
+        
+    auto a = x.then([](const int& x){ cout << "done 1" << endl; return 1; });
+    auto b = x.then([](const int& x){ cout << x << endl; return 1; });
+    }
+    
+    //a.get();
+    //b.get();
+    
+    f();
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+
+#include <boost/multiprecision/integer.hpp>
+
+using namespace std;
+
+template <typename T, typename N, typename O>
+T power(T x, N n, O op)
+{
+    if (n == 0) return identity_element(op);
+    
+    while ((n & 1) == 0) {
+        n >>= 1;
+        x = op(x, x);
+    }
+    
+    T result = x;
+    n >>= 1;
+    while (n != 0) {
+        x = op(x, x);
+        if ((n & 1) != 0) result = op(result, x);
+        n >>= 1;
+    }
+    return result;
+}
+
+template <typename N>
+struct multiply_2x2 {
+    array<N, 4> operator()(const array<N, 4>& x, const array<N, 4>& y)
+    {
+        return { x[0] * y[0] + x[1] * y[2], x[0] * y[1] + x[1] * y[3],
+                 x[2] * y[0] + x[3] * y[2], x[2] * y[1] + x[3] * y[3] };
+    }
+};
+
+template <typename N>
+array<N, 4> identity_element(const multiply_2x2<N>&) { return { N(1), N(0), N(0), N(1) }; }
+
+template <typename R, typename N>
+R fibonacci(N n) {
+    if (n == 0) return R(0);
+    return power(array<R, 4>{ 1, 1, 1, 0 }, N(n - 1), multiply_2x2<R>())[0];
+}
+
+#include <boost/multiprecision/cpp_int.hpp>
+
+using namespace boost::multiprecision;
+
+
+#include <boost/thread/future.hpp>
+
+using namespace std::chrono;
+
+int main() {
+    
+    auto x = boost::async([]{ return fibonacci<cpp_int>(1'000'000); });
+    auto y = boost::async([]{ return fibonacci<cpp_int>(2'000'000); });
+    
+    auto z = when_all(std::move(x), std::move(y)).then([](auto f){
+        auto t = f.get();
+        return cpp_int(get<0>(t).get() * get<1>(t).get());
+    });
+    
+    cout << z.get() << endl;
+    
+    // auto z = boost::when_all([](auto x){ }, x, y);
+    
+#if 0
+    z.then([](auto r){
+            return get<0>(r.get()).get() *  get<1>(r.get()).get();
+    });
+#endif
+    
+   // cout << z.get() << endl;
+
+    
+    // Do something
+    
+    //y.wait();
+    //z.wait();
+
+#if 0
+    
+    this_thread::sleep_for(seconds(60));
+    // y.wait();
+    auto start = chrono::high_resolution_clock::now();
+    
+    auto x = fibonacci<cpp_int>(1'000'000);
+    
+    cout << chrono::duration_cast<chrono::milliseconds>
+    (chrono::high_resolution_clock::now()-start).count() << endl;
+    
+    cout << x << endl;
+#endif
+    
+#if 0
+    
+    future<cpp_int> x = async(fibonacci<cpp_int, int>, 1'000'000);
+    
+    // Do something
+    
+    auto start = chrono::high_resolution_clock::now();
+    
+    x.wait();
+    
+    cout << chrono::duration_cast<chrono::milliseconds>
+    (chrono::high_resolution_clock::now()-start).count() << endl;
+    
+    
+    cout << x.get() << endl;
+#endif
+
+#if 0
+    boost::promise<int> p;
+    boost::future<int> x = p.get_future();
+    auto y = x.then([](auto x){ cout << "then 1: " << x.get() << endl; });
+    x.then([](auto x){ cout << "then 2: " << x.get() << endl; });
+    p.set_value(5);
+    y.wait();
+#endif
+}
+
+#endif
+
+
+
 
 
 #if 0
@@ -15,9 +359,11 @@ using namespace std;
 int main() {
 
     auto body = [n = 10]() mutable {
-        cout << n << endl;
-        return n == 0;
+        cout << n-- << endl;
+        return n != 0;
     };
+    
+    while (body()) ;
 
 }
 
@@ -1090,32 +1436,6 @@ struct task_group {
     };
 };
 
-
-#if 0
-template <typename T, typename F>
-struct task_simple_ : task_<T> {
-    F _f;
-    explicit task_simple_(F f) : _f(move(f)) { }
-
-    template <typename... Args>
-    void operator()(Args... args) { this->resolve(_f, forward<Args>(args)...); }
-};
-
-template <typename T>
-struct task_group_ : task_<T> {
-    function<void()> _f;
-    atomic<size_t> _n;
-
-    template <typename F, typename... Args>
-    explicit task_group_(F f, future<Args>... args)
-        : _f([this, f, args...]{ this->resolve(f, args.get()...); }), _n(sizeof...(Args))  { }
-
-    void operator()() {
-        if (--_n == 0) _f();
-    }
-};
-
-#endif
 
 template <typename T>
 class packaged;
@@ -3500,11 +3820,9 @@ N fibonacci(N n) {
 
 using namespace boost::multiprecision;
 
-#if 0
 int main() {
     cout << fibonacci(cpp_int(20000)) << endl;
 }
-#endif
 
 int main() {
     // auto x = f(annotate());
