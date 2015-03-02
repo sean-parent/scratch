@@ -76,14 +76,6 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>A0F2B7F0D4854E0CD80891D6C04B171B4954D2AF</string>
-			<key>IDESourceControlWCCName</key>
-			<string>double-conversion</string>
-		</dict>
-		<dict>
-			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
-			<string>public.vcs.git</string>
-			<key>IDESourceControlWCCIdentifierKey</key>
 			<string>75EA7FDD-5620-4538-BA02-CA4CA5B0EDA1</string>
 			<key>IDESourceControlWCCName</key>
 			<string>double-conversion</string>
@@ -92,7 +84,15 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>01F9EDC5-2143-4177-8E3A-218D0C9810A6</string>
+			<string>A0F2B7F0D4854E0CD80891D6C04B171B4954D2AF</string>
+			<key>IDESourceControlWCCName</key>
+			<string>double-conversion</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>15995E0C9CDE61F407FB9EE700461F8501EE3237</string>
 			<key>IDESourceControlWCCName</key>
 			<string>ic_chrome</string>
 		</dict>
@@ -100,7 +100,7 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>15995E0C9CDE61F407FB9EE700461F8501EE3237</string>
+			<string>01F9EDC5-2143-4177-8E3A-218D0C9810A6</string>
 			<key>IDESourceControlWCCName</key>
 			<string>ic_chrome</string>
 		</dict>

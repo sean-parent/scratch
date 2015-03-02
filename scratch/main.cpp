@@ -3,18 +3,20 @@
 #if 1
 // GOOD for talk
 
+#include <deque>
 #include <iostream>
 #include <memory>
-#include <vector>
-#include <deque>
 #include <thread>
-
-//#include <dispatch/dispatch.h>
+#include <vector>
 
 #include <boost/multiprecision/cpp_int.hpp>
 
+/**************************************************************************************************/
+
 using namespace std;
 using namespace boost::multiprecision;
+
+/**************************************************************************************************/
 
 template <typename T, typename N, typename O>
 T power(T x, N n, O op)
@@ -36,6 +38,8 @@ T power(T x, N n, O op)
     return result;
 }
 
+/**************************************************************************************************/
+
 template <typename N>
 struct multiply_2x2 {
     array<N, 4> operator()(const array<N, 4>& x, const array<N, 4>& y)
@@ -54,7 +58,7 @@ R fibonacci(N n) {
     return power(array<R, 4>{ 1, 1, 1, 0 }, N(n - 1), multiply_2x2<R>())[0];
 }
 
-//--------
+/**************************************************************************************************/
 
 using lock_t = unique_lock<mutex>;
 
@@ -111,6 +115,8 @@ public:
     }
 };
 
+/**************************************************************************************************/
+
 class task_system {
     const unsigned              _count{thread::hardware_concurrency()};
     vector<thread>              _threads;
@@ -154,7 +160,11 @@ public:
     }
 };
 
+/**************************************************************************************************/
+
 task_system _system;
+
+/**************************************************************************************************/
 
 template <typename>
 struct result_of_;
@@ -164,6 +174,8 @@ struct result_of_<R(Args...)> { using type = R; };
 
 template <typename F>
 using result_of_t_ = typename result_of_<F>::type;
+
+/**************************************************************************************************/
 
 template <typename R>
 struct shared_base {
@@ -248,8 +260,6 @@ class future {
     const R& get() const { return _p->get(); }
 };
 
-    /* ... */
-
 template<typename R, typename ...Args >
 class packaged_task<R (Args...)> {
     weak_ptr<shared<R(Args...)>> _p;
@@ -269,13 +279,11 @@ class packaged_task<R (Args...)> {
     }
 };
 
-
 template <typename S, typename F>
 auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>> {
     auto p = make_shared<shared<S>>(forward<F>(f));
     return make_pair(packaged_task<S>(p), future<result_of_t_<S>>(p));
 }
-
 
 template <typename F, typename ...Args>
 auto async(F&& f, Args&&... args)
@@ -289,30 +297,7 @@ auto async(F&& f, Args&&... args)
     return get<1>(pack);
 }
 
-#if 0
-template <typename F, typename ...Args>
-auto async(F&& f, Args&&... args)
-{
-    using result_type = result_of_t<F (Args...)>;
-    using packaged_type = packaged_task<result_type()>;
-    
-    auto pack = package<result_type()>(bind(forward<F>(f), forward<Args>(args)...));
-    auto p = new packaged_type(move(get<0>(pack)));
-    
-    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
-                     p, [](void* f_) {
-                         packaged_type* f = static_cast<packaged_type*>(f_);
-                         (*f)();
-                         delete f;
-                     });
-    
-    return get<1>(pack);
-}
-#endif
-
 int main() {
-    
-#if 1
     future<cpp_int> x = async([]{ return fibonacci<cpp_int>(100); });
     
     future<cpp_int> y = x.then([](const cpp_int& x){ return cpp_int(x * 2); });
@@ -320,21 +305,9 @@ int main() {
                                                             
     cout << y.get() << endl;
     cout << z.get() << endl;
-                                                            
-    
-#endif
-#if 0
-    
-    auto x = async([]{ return fibonacci<cpp_int>(1'000); });
-    auto a = x.then([](const cpp_int&){ fibonacci<cpp_int>(1'000'000); cout << "done 1" << endl; return 1; });
-    auto b = x.then([](const cpp_int&){ cout << "done 2" << endl; return 2; });
-    
-    a.get();
-    b.get();
-#endif
-                                                
-
 }
+
+/**************************************************************************************************/
 
 #endif
 
