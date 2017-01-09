@@ -1,6 +1,6071 @@
 
 
+
 #if 1
+
+#include <future>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <thread>
+#include <unordered_map>
+
+#include <dispatch/dispatch.h>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+
+class serial_queue {
+    dispatch_queue_t _q = dispatch_queue_create("com.stlab.serial_queue", NULL);
+    
+  public:
+    serial_queue() = default;
+    serial_queue(const char* name) : _q{ dispatch_queue_create(name, NULL) } { }
+    ~serial_queue() { dispatch_release(_q); }
+    
+    template <class Function, class... Args>
+    auto async(Function&& f, Args&&... args )
+    {
+        using result_type = std::result_of_t<std::decay_t<Function>(std::decay_t<Args>...)>;
+        using packaged_type = std::packaged_task<result_type()>;
+        
+        // Forward arguments through bind.
+        
+        auto p = new packaged_type(std::bind([_f = std::forward<Function>(f)](Args&... args) {
+            return _f(std::move(args)...);
+        }, std::forward<Args>(args)...));
+        
+        auto result = p->get_future();
+
+        dispatch_async_f(_q,
+                p, [](void* f_) {
+                    packaged_type* f = static_cast<packaged_type*>(f_);
+                    (*f)();
+                    delete f;
+                });
+        
+        return result;
+    }
+};
+
+class registry {
+    mutex _mutex;
+    unordered_map<string, string> _map;
+  public:
+    void set(string key, string value) {
+        unique_lock<mutex> lock(mutex);
+        _map.emplace(move(key), move(value));
+    }
+    
+    string get(const string& key) {
+        unique_lock<mutex> lock(mutex);
+        return _map.at(key);
+    }
+};
+
+
+class async_registry {
+
+    // NOTE: destruction order matters
+    
+    serial_queue _q;
+    
+    using map_t = unordered_map<string, annotate>;
+    
+    shared_ptr<map_t> _map = make_shared<map_t>();
+public:
+    void set(string key, annotate value) {
+        _q.async([_map = _map](string key, annotate value) {
+            _map->emplace(move(key), move(value));
+        }, move(key), move(value)) /* .detatch() */;
+    }
+    
+    auto get(string key) {
+        return _q.async([_map = _map](string key) {
+            return _map->at(key);
+        }, move(key));
+    }
+};
+
+int main() {
+
+    auto f = async([](annotate x){ return x; }, annotate());
+    auto a = f.get();
+
+#if 0
+    std::future<annotate> result;
+    {
+    async_registry registry;
+    
+    registry.set("Hello", annotate());
+    result = registry.get("Hello");
+    }
+    
+    try {
+        result.get();
+    } catch (std::exception& error) {
+        cout << "error: " << error.what() << endl;
+    }
+#endif
+}
+
+#endif
+
+#if 0
+#include <iostream>
+
+#include <boost/parameter/name.hpp>
+#include <boost/parameter/preprocessor.hpp>
+
+namespace stlab {
+
+BOOST_PARAMETER_NAME(name)    // Note: no semicolon
+BOOST_PARAMETER_NAME(bind)
+BOOST_PARAMETER_NAME(action)
+
+BOOST_PARAMETER_FUNCTION(
+  (void),                // 1. parenthesized return type
+  button,                // 2. name of the function template
+
+  tag,                   // 3. namespace of tag types
+
+  (optional              //    four optional parameters, with defaults
+    (name,           (const char*), "")
+    (bind,           *, nullptr)
+    (action,         *, [](const char*){ })
+  )
+)
+{
+    action(name);
+}
+
+} // namespace stlab
+
+using namespace stlab;
+
+int main() {
+    button(_name="Hello", _action=[](const char* name){ std::cout << "name=" << name << std::endl; });
+}
+
+#endif
+
+
+#if 0
+
+#include <functional>
+#include <future>
+#include <type_traits>
+
+#include <dispatch/dispatch.h>
+
+namespace stlab {
+
+template <class Function, class... Args>
+auto async(Function&& f, Args&&... args )
+{
+    using result_type = std::result_of_t<std::decay_t<Function>(std::decay_t<Args>...)>;
+    using packaged_type = std::packaged_task<result_type()>;
+    
+    auto p = new packaged_type(std::bind(std::forward<Function>(f), std::forward<Args>(args)...));
+    auto result = p->get_future();
+
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            p, [](void* f_) {
+                packaged_type* f = static_cast<packaged_type*>(f_);
+                (*f)();
+                delete f;
+            });
+    
+    return result;
+}
+
+} // namespace stlab
+
+#include <algorithm>
+#include <thread>
+#include <chrono>
+#include <iostream>
+#include <forward_list>
+
+using namespace std;
+using namespace std::chrono;
+using namespace std::chrono_literals;
+
+template <class I, class N>
+I reverse_n_forward(I f, N n) {
+    if (n < 2) return next(f, n);
+
+    auto h = n / 2;
+
+    I m = reverse_n_forward(f, h);
+    I m2 = next(m, n % 2);
+    I l = reverse_n_forward(m2, h);
+    swap_ranges(f, m, m2);
+    return l;
+}
+
+template <class I>
+void reverse_forward(I f, I l) {
+    reverse_n_forward(f, distance(f, l));
+}
+
+template <class I>
+void reverse_(I f, I l) {
+    auto n = distance(f, l);
+    if (n < 2) return;
+
+    auto m1 = next(f, n / 2);
+    auto m2 = next(m1, n % 2);
+    reverse(f, m1);
+    reverse(m2, l);
+    swap_ranges(f, m1, m2);
+}
+
+template <class ForwardIterator, class N>
+auto reverse_n(ForwardIterator f, N n) {
+    if (n < 2) return next(f, n);
+
+    auto h = n / 2;
+    auto m1 = reverse_n(f, h);
+    auto m2 = next(m1, n % 2);
+    auto l = reverse_n(m2, h);
+    swap_ranges(f, m1, m2);
+    return l;
+}
+
+template <class ForwardIterator>
+void reverse(ForwardIterator f, ForwardIterator l) {
+    reverse_n(f, distance(f, l));
+}
+
+int main() {
+    std::forward_list<int> x = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    ::reverse(begin(x), end(x));
+    for (const auto& e : x) cout << e << endl;
+
+    stlab::async([](int x){ cout << "begin:" << x << endl; this_thread::sleep_for(3s); cout << "end" << endl; }, 42);
+    cout << "concurrent?" << endl;
+    cout << "test" << endl;
+    this_thread::sleep_for(3s);
+}
+
+#endif
+
+#if 0
+
+#include <thread>
+#include <iostream>
+#include <deque>
+#include <vector>
+#include <type_traits>
+
+/**************************************************************************************************/
+
+using namespace std;
+
+/*
+    The TEST_USE_ flags are mutually exclusive. Set one of them to 1 and the rest to 0 to enable
+    that test.
+*/
+
+#if 0
+#define TEST_USE_ASIO 0
+#define TEST_USE_GCD 0
+#define TEST_USE_QUEUE 0
+#define TEST_USE_SMQUEUE 0
+#define TEST_USE_MQUEUE 1
+#endif
+
+// #define TEST_USE_GCD 1
+#define TEST_USE_MQUEUE 1
+#define K 56
+#define K2 1
+
+#if 0
+#define TEST_USE_BITQUEUE 1
+#define K 48
+#define K2 1
+#endif
+
+/*
+    This flag determines if we are testing empty tasks (just function pionters) or tasks with a
+    small captured value.
+*/
+
+#define TEST_PAYLOAD 0
+
+/**************************************************************************************************/
+
+#if TEST_USE_ASIO
+
+#include <boost/asio/io_service.hpp>
+
+using namespace boost;
+using namespace boost::asio;
+
+/**************************************************************************************************/
+
+class task_system {
+    io_service                      _service;
+    vector<thread>                  _threads;
+    unique_ptr<io_service::work>    _work{make_unique<io_service::work>(_service)};
+
+  public:
+    task_system() {
+        for (unsigned n = 0; n != thread::hardware_concurrency(); ++n) {
+            _threads.emplace_back([&]{
+                _service.run();
+            });
+        }
+    }
+
+    ~task_system() {
+        _work.reset();
+        for (auto& e : _threads) e.join();
+    }
+
+    template <typename F>
+    void async_(F&& f) {
+        _service.post(forward<F>(f));
+    }
+};
+
+/**************************************************************************************************/
+
+#elif TEST_USE_QUEUE
+
+/**************************************************************************************************/
+
+using lock_t = unique_lock<mutex>;
+
+class notification_queue {
+    deque<function<void()>> _q;
+    bool                    _done{false};
+    mutex                   _mutex;
+    condition_variable      _ready;
+
+  public:
+    void done() {
+        {
+            unique_lock<mutex> lock{_mutex};
+            _done = true;
+        }
+        _ready.notify_all();
+    }
+
+    bool pop(function<void()>& x) {
+        lock_t lock{_mutex};
+         while (_q.empty() && !_done) _ready.wait(lock);
+         if (_q.empty()) return false;
+         x = move(_q.front());
+        _q.pop_front();
+        return true;
+    }
+
+    template<typename F>
+    void push(F&& f) {
+        {
+            lock_t lock{_mutex};
+            _q.emplace_back(forward<F>(f));
+        }
+        _ready.notify_one();
+    }
+};
+
+class task_system {
+    const unsigned              _count{thread::hardware_concurrency()};
+    vector<thread>              _threads;
+    notification_queue          _q;
+
+    void run(unsigned i) {
+        while (true) {
+            function<void()> f;
+            if (!_q.pop(f)) break;
+            f();
+        }
+    }
+
+  public:
+    task_system() {
+        for (unsigned n = 0; n != _count; ++n) {
+            _threads.emplace_back([&, n]{ run(n); });
+        }
+    }
+
+    ~task_system() {
+        _q.done();
+        for (auto& e : _threads) e.join();
+    }
+
+    template <typename F>
+    void async_(F&& f) {
+        _q.push(forward<F>(f));
+    }
+};
+
+/**************************************************************************************************/
+
+#elif TEST_USE_SMQUEUE
+
+using lock_t = unique_lock<mutex>;
+
+class notification_queue {
+    deque<function<void()>> _q;
+    bool                    _done{false};
+    mutex                   _mutex;
+    condition_variable      _ready;
+
+  public:
+    void done() {
+        {
+            unique_lock<mutex> lock{_mutex};
+            _done = true;
+        }
+        _ready.notify_all();
+    }
+
+    bool pop(function<void()>& x) {
+        lock_t lock{_mutex};
+         while (_q.empty() && !_done) _ready.wait(lock);
+         if (_q.empty()) return false;
+         x = move(_q.front());
+        _q.pop_front();
+        return true;
+    }
+
+    template<typename F>
+    void push(F&& f) {
+        {
+            lock_t lock{_mutex};
+            _q.emplace_back(forward<F>(f));
+        }
+        _ready.notify_one();
+    }
+};
+
+class task_system {
+    const unsigned              _count{thread::hardware_concurrency()};
+    vector<thread>              _threads;
+    vector<notification_queue>  _q{_count};
+    atomic<unsigned>            _index{0};
+
+ void run(unsigned i) {
+        while (true) {
+            function<void()> f;
+            if (!_q[i].pop(f)) break;
+            f();
+        }
+    }
+
+  public:
+    task_system() {
+        for (unsigned n = 0; n != _count; ++n) {
+            _threads.emplace_back([&, n]{ run(n); });
+        }
+    }
+
+    ~task_system() {
+        for (auto& e : _q) e.done();
+        for (auto& e : _threads) e.join();
+    }
+
+    template <typename F>
+    void async_(F&& f) {
+        auto i = _index++;
+        _q[i % _count].push(forward<F>(f));
+    }
+};
+
+/**************************************************************************************************/
+
+#elif TEST_USE_MQUEUE
+
+/**************************************************************************************************/
+
+using lock_t = unique_lock<mutex>;
+
+class notification_queue {
+    deque<function<void()>> _q;
+    bool                    _done{false};
+    mutex                   _mutex;
+    condition_variable      _ready;
+    
+public:
+    bool try_pop(function<void()>& x) {
+        lock_t lock{_mutex, try_to_lock};
+        if (!lock || _q.empty()) return false;
+        x = move(_q.front());
+        _q.pop_front();
+        return true;
+    }
+    
+    template<typename F>
+    bool try_push(F&& f) {
+        {
+            lock_t lock{_mutex, try_to_lock};
+            if (!lock) return false;
+            _q.emplace_back(forward<F>(f));
+        }
+        _ready.notify_one();
+        return true;
+    }
+    
+    void done() {
+        {
+            unique_lock<mutex> lock{_mutex};
+            _done = true;
+        }
+        _ready.notify_all();
+    }
+    
+    bool pop(function<void()>& x) {
+        lock_t lock{_mutex};
+        while (_q.empty() && !_done) _ready.wait(lock);
+        if (_q.empty()) return false;
+        x = move(_q.front());
+        _q.pop_front();
+        return true;
+    }
+    
+    template<typename F>
+    void push(F&& f) {
+        {
+            lock_t lock{_mutex};
+            _q.emplace_back(forward<F>(f));
+        }
+        _ready.notify_one();
+    }
+};
+
+/**************************************************************************************************/
+
+class task_system {
+    const unsigned              _count{thread::hardware_concurrency() +
+                                       thread::hardware_concurrency() / 2};
+    vector<thread>              _threads;
+    vector<notification_queue>  _q{_count};
+    atomic<unsigned>            _index{0};
+    
+    void run(unsigned i) {
+        while (true) {
+            function<void()> f;
+
+            for (unsigned n = 0; n != _count * K; ++n) {
+                if (_q[(i + n) % _count].try_pop(f)) break;
+            }
+            if (!f && !_q[i].pop(f)) break;
+            
+            f();
+        }
+    }
+    
+public:
+    task_system() {
+        for (unsigned n = 0; n != _count; ++n) {
+            _threads.emplace_back([&, n]{ run(n); });
+        }
+    }
+    
+    ~task_system() {
+        for (auto& e : _q) e.done();
+        for (auto& e : _threads) e.join();
+    }
+    
+    template <typename F>
+    void async_(F&& f) {
+        auto i = _index++;
+
+        for (unsigned n = 0; n != _count * K2; ++n) {
+            if (_q[(i + n) % _count].try_push(forward<F>(f))) return;
+        }
+
+        _q[i % _count].push(forward<F>(f));
+    }
+};
+
+/**************************************************************************************************/
+
+#elif TEST_USE_BITQUEUE
+
+/**************************************************************************************************/
+
+using lock_t = unique_lock<mutex>;
+
+class notification_queue {
+    deque<function<void()>> _q;
+    bool                    _done{false};
+    mutex                   _mutex;
+    condition_variable      _ready;
+    
+public:
+    enum class state { success, empty, busy };
+
+    state try_pop(function<void()>& x) {
+        lock_t lock{_mutex, try_to_lock};
+        if (!lock) return state::busy;
+        if (_q.empty()) return state::empty;
+        x = move(_q.front());
+        _q.pop_front();
+        return state::success;
+    }
+    
+    template<typename F>
+    bool try_push(F&& f) {
+        {
+            lock_t lock{_mutex, try_to_lock};
+            if (!lock) return false;
+            _q.emplace_back(forward<F>(f));
+        }
+        _ready.notify_one();
+        return true;
+    }
+    
+    void done() {
+        {
+            unique_lock<mutex> lock{_mutex};
+            _done = true;
+        }
+        _ready.notify_all();
+    }
+    
+    bool pop(function<void()>& x) {
+        lock_t lock{_mutex};
+        while (_q.empty() && !_done) _ready.wait(lock);
+        if (_q.empty()) return false;
+        x = move(_q.front());
+        _q.pop_front();
+        return true;
+    }
+    
+    template<typename F>
+    void push(F&& f) {
+        {
+            lock_t lock{_mutex};
+            _q.emplace_back(forward<F>(f));
+        }
+        _ready.notify_one();
+    }
+};
+
+/**************************************************************************************************/
+
+#if 1
+int popcnt(int x) {
+    int result = 0;
+    while (x) {
+        ++result;
+        x &= x - 1;
+    }
+    return result;
+}
+#else
+int popcnt(int x) {
+    int result = 0;
+    while (x &= x - 1) ++result;
+    return result;
+}
+#endif
+
+class task_system {
+    const unsigned              _count{thread::hardware_concurrency()};
+    vector<thread>              _threads;
+    vector<notification_queue>  _q{_count};
+    atomic<unsigned>            _index{0};
+    
+    void run(unsigned i) {
+        while (true) {
+            function<void()> f;
+
+            int empty = 0;
+
+
+            for (unsigned n = 0; n != _count * K; ++n) {
+                auto state = _q[(i + n) % _count].try_pop(f);
+                if (state == notification_queue::state::success) break;
+                if (state == notification_queue::state::empty) {
+                    empty |= 1 << ((i + n) % _count);
+                    if (popcnt(empty) == (_count + 1)) break; // break will never happen
+                }
+            }
+
+            if (!f && !_q[i].pop(f)) break;
+            f();
+        }
+    }
+    
+public:
+    task_system() {
+        for (unsigned n = 0; n != _count; ++n) {
+            _threads.emplace_back([&, n]{ run(n); });
+        }
+    }
+    
+    ~task_system() {
+        for (auto& e : _q) e.done();
+        for (auto& e : _threads) e.join();
+    }
+    
+    template <typename F>
+    void async_(F&& f) {
+        auto i = _index++;
+
+        for (unsigned n = 0; n != _count * K2; ++n) {
+            if (_q[(i + n) % _count].try_push(forward<F>(f))) return;
+        }
+
+        _q[i % _count].push(forward<F>(f));
+    }
+};
+
+#endif
+
+/**************************************************************************************************/
+
+#if TEST_USE_GCD
+
+/**************************************************************************************************/
+
+#include <dispatch/dispatch.h>
+
+/**************************************************************************************************/
+
+template <typename F>
+auto async_(F&& f) -> std::enable_if_t<!std::is_convertible<F, void(*)()>::value>
+{
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+        new F(move(f)), [](void* p){
+            auto f = static_cast<F*>(p);
+            (*f)();
+            delete(f);
+        });
+}
+
+void async_(void (*f)()) {
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+        nullptr, (void(*)(void*))(f));
+}
+
+/**************************************************************************************************/
+
+#else
+
+/**************************************************************************************************/
+
+task_system _system;
+
+template <typename F>
+void async_(F&& f) {
+    _system.async_(forward<F>(f));
+}
+
+/**************************************************************************************************/
+
+#endif // TEST_USE_GCD
+
+/**************************************************************************************************/
+
+
+/*
+    This test floods the tasking system with a million small tasks followed by a single task that
+    it waits on. There is no guarantee that all prior tasks are processed, however with 1M tasks
+    it will be a small delta from the end. This task is repeated multiple times and the times
+    averaged.
+*/
+
+__attribute__ ((noinline)) void time() {
+    for (int n = 0; n != 1000000; ++n) {
+    #if TEST_PAYLOAD
+        async_([n]{ });
+    #else
+        async_([]{ });
+    #endif
+    }
+
+    mutex block;
+    condition_variable ready;
+    bool done = false;
+
+    async_([&]{
+        {
+            unique_lock<mutex> lock{block};
+            done = true;
+        }
+        ready.notify_one();
+    });
+
+    unique_lock<mutex> lock{block};
+    while (!done) ready.wait(lock);
+}
+
+int main() {
+    auto start = chrono::high_resolution_clock::now();
+    for (int n = 0; n != 10; ++n) time();
+    cout << chrono::duration_cast<chrono::milliseconds>
+        (chrono::high_resolution_clock::now()-start).count() / 10 << endl;
+
+}
+
+#endif
+
+#if 0
+
+/*
+    Copyright 2013 Adobe Systems Incorporated
+    Distributed under the MIT License (see license at
+    http://stlab.adobe.com/licenses.html)
+    
+    This file is intended as example code and is not production quality.
+*/
+
+#include <cassert>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <vector>
+#include <thread>
+#include <future>
+
+using namespace std;
+
+/******************************************************************************/
+// Library
+
+template <typename T>
+T copy(T&& x) { return std::forward<T>(x); }
+
+template <typename T>
+void draw(const T& x, ostream& out, size_t position)
+{ out << string(position, ' ') << x << endl; }
+
+class object_t {
+  public:
+    template <typename T>
+    object_t(T x) : self_(make_unique<model<T>>(move(x)))
+    { }
+    
+    object_t(const object_t& x) : self_(x.self_->copy_())
+    { cout << "copy" << endl; }
+    object_t(object_t&&) noexcept = default;
+    
+    object_t& operator=(const object_t& x) { return *this = copy(x); }
+    object_t& operator=(object_t&&) noexcept = default;
+    
+    friend void draw(const object_t& x, ostream& out, size_t position)
+    { x.self_->draw_(out, position); }
+    
+  private:
+    struct concept_t {
+        virtual ~concept_t() = default;
+        virtual unique_ptr<concept_t> copy_() const = 0;
+        virtual void draw_(ostream&, size_t) const = 0;
+    };
+    template <typename T>
+    struct model final : concept_t {
+        model(T x) : data_(move(x)) { }
+        unique_ptr<concept_t> copy_() const override { return make_unique<model>(*this); }
+        void draw_(ostream& out, size_t position) const override
+        { draw(data_, out, position); }
+        
+        T data_;
+    };
+    
+   unique_ptr<const concept_t> self_;
+};
+
+using document_t = vector<object_t>;
+
+void draw(const document_t& x, ostream& out, size_t position)
+{
+    out << string(position, ' ') << "<document>" << endl;
+    for (auto& e : x) draw(e, out, position + 2);
+    out << string(position, ' ') << "</document>" << endl;
+}
+
+using history_t = vector<document_t>;
+
+void commit(history_t& x) { assert(x.size()); x.push_back(x.back()); }
+void undo(history_t& x) { assert(x.size()); x.pop_back(); }
+document_t& current(history_t& x) { assert(x.size()); return x.back(); }
+
+/******************************************************************************/
+// Client
+
+class my_class_t {
+    /* ... */
+};
+
+void draw(const my_class_t&, ostream& out, size_t position)
+{ out << string(position, ' ') << "my_class_t" << endl; }
+
+int main()
+{
+    history_t h(1);
+
+    current(h).emplace_back(0);
+    current(h).emplace_back(string("Hello!"));
+    
+    draw(current(h), cout, 0);
+    cout << "--------------------------" << endl;
+    
+    commit(h);
+    
+    current(h).emplace_back(current(h));
+
+    auto saving = async([document = current(h)]() {
+        this_thread::sleep_for(chrono::seconds(3));
+        cout << "--------- 'save' ---------" << endl;
+        draw(document, cout, 0);
+    });
+
+
+    current(h).emplace_back(my_class_t());
+    current(h)[1] = string("World");
+    
+    draw(current(h), cout, 0);
+    cout << "--------------------------" << endl;
+    
+    undo(h);
+    
+    draw(current(h), cout, 0);
+}
+
+
+#endif
+
+#if 0
+
+#include <tuple>
+#include <iostream>
+
+#include <stlab/future.hpp>
+#include <stlab/channel.hpp>
+
+using namespace stlab;
+using namespace std;
+using namespace std::chrono;
+
+struct sum {
+    process_state_scheduled _state = await_forever;
+    int _sum = 0;
+
+    void await(int n) { _sum += n; }
+
+    int yield() { _state = await_forever; return _sum; }
+
+    void close() { _state = yield_immediate; }
+
+    const auto& state() const { return _state; }
+};
+
+int main() {
+
+    sender<int> send;
+    receiver<int> receive;
+
+    tie(send, receive) = channel<int>(default_scheduler());
+
+    auto hold = receive
+        | sum()
+        | [](int x){ cout << x << '\n'; };
+
+    receive.set_ready();
+
+    send(1);
+    send(2);
+    send(3);
+    send.close();
+
+    sleep(5);
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+
+#include <test/test.hpp>
+
+int main() {
+    test::test();
+}
+#endif
+
+#if 0
+
+//
+//  main.cpp
+//  div255
+//
+//  Created by Jack Sisson on 9/11/16.
+
+#include "assert.h"
+
+#include <iostream>
+#include <string>
+#include <functional>
+
+using namespace std;
+
+// Wrong!
+inline uint8_t Oldmul8x8Div255(unsigned a, unsigned b) {
+    uint32_t temp = a * b + 128;
+    return (uint8_t)((temp +(temp>>8))>>8);
+}
+
+// Let's fix it:
+
+// Integer division by N is equivalent to repeated subtraction by
+// N until the result is < N.
+inline uint8_t Mul8x8Div255_1(unsigned a, unsigned b) {
+    uint32_t temp = a * b; // + 128;
+    uint32_t count = 0;
+    while (temp >= 255) {
+        temp -= 255;
+        ++count;
+    }
+    return count;
+}
+
+// temp - 255 = temp + 1 - 256. No need to worry about overflow, given our type selection.
+inline uint8_t Mul8x8Div255_2(unsigned a, unsigned b) {
+    uint32_t temp = a * b;// + 128;
+    auto count = 0;
+    while (temp >= 255) {
+        temp += 1;
+        temp -= 256;
+        ++count;
+    }
+    return (uint8_t)count;
+}
+
+// We know that one will be added (a * b) / 255 times, since that's exactly how many iterations the while
+// loop body will execute. We can therefore add temp/255 to temp up front and remove the temp += 1
+// from the while loop.
+inline uint8_t Mul8x8Div255_3(unsigned a, unsigned b) {
+    uint32_t temp = a * b;// + 128;
+    uint32_t count = 0;
+    
+    temp += temp / 255;
+    while (temp >= 255) {
+        temp -= 256;
+        ++count;
+    }
+    
+    return (uint8_t)count;
+}
+
+// We can now add one to temp and the condition expression. This will allow
+// us to replace the while loop with a division by 256.
+inline uint8_t Mul8x8Div255_4(unsigned a, unsigned b) {
+    uint32_t temp = a * b;// + 128;
+    uint32_t count = 0;
+    
+    temp += temp / 255;
+    temp += 1;
+    while (temp >= 256) {
+        temp -= 256;
+        ++count;
+    } // this is equivalent to integer division by 256
+    
+    return (uint8_t)count;
+}
+
+// Let's swap in the division, and replace temp / 255 with
+// an equivalent expression.
+inline uint8_t Mul8x8Div255_5(unsigned a, unsigned b) {
+    uint32_t temp = a * b;// + 128;
+    
+    temp += temp / 256 + (temp / 255 - temp / 256);
+    temp += 1;
+    temp /= 256;
+    
+    return (uint8_t)temp;
+}
+
+// Now, we can remove the (temp/255 - temp/256) if we can show:
+//    temp/255 != temp/256 implies that
+//    (temp + 1 + temp/256) / 256 == (temp + 1 + temp/255) / 256
+//
+// Given an integer a, a * 255 = a * (256 - 1), so a * 255 = a * 256 - a. Thus, given integer
+// b in range [0, 255 * 255], b/255 != b/256 iff (0xFF & b) >= (0x100 - b/255). In these cases,
+// b/255 - b/256 = 1. Thinking about this like division by 9 is helpful (i.e. diving by 9 is not the same
+// as dividing by 10 for 9; 18, 19; 27, 28, 29, etc.).
+//
+// If b/255 - b/256 = 1, 0 <= (0xFF & (b + b/255)) <= b/255 - 1, since the lower limit for
+// (0xFF & b) is 0x100 - b/255, and the upper limit is 0x100 - b/255 + (b/255 - 1). Additionally, since
+// b/255 <= 255 it follows that 1 <= 0xFF & (b + b/255 + 1) <= 255. Since b/256 is exactly one less than b/255,
+// 0 <= 0xFF & (b + b/256 + 1) <= 254. Therefore, the subraction by one that comes from swapping in temp/256
+// never takes the least significant byte from 0 to 255, which is the only subraction by 1 that could change
+// the result of the division. We can remove the (temp/255 - temp/256).
+void testProof() {
+    for (unsigned a = 0; a <= 255 * 255; ++a) {
+        if ((0xFF & a) >= 0x100 - a/255) {
+            assert(a/255 - a/256 == 1);
+            assert((0xFF & (a + a/255)) >= 0 && (0xFF & (a + a/255)) <= a/255 - 1);
+            assert((0xFF & (a + a/255 + 1)) >= 1 && (0xFF & (a + a/255 + 1)) <= 255);
+            assert((0xFF & (a + a/256 + 1)) >= 0 && (0xFF & (a + a/256 + 1)) <= 254);
+        } else {
+            assert(a/255 == a/256);
+        }
+    }
+}
+
+// With this proof in hand, we can get rid of the (temp/255 - temp/256) term, and we might as well
+// go ahead and replace the divisions by 256 with >> 8 and collapse into one statement.
+inline uint8_t Mul8x8Div255(unsigned a, unsigned b) {
+    uint32_t temp = a * b + 127;
+    return (uint8_t)((temp + 1 + (temp >> 8)) >> 8);
+}
+
+// Now, let's test all of our assertions
+void test(function<unsigned(unsigned, unsigned)> func, string testName) {
+    int errorCount = 0;
+    for (unsigned a = 0; a < 255; ++a) {
+        for (unsigned b = 0; b < 255; ++b) {
+            if (func(a, b) != (a * b + 127) / 255) {
+                ++errorCount;
+            }
+        }
+    }
+    
+    cout << testName << endl;
+    if (errorCount > 0) {
+        cout << "\tFailure: " << errorCount << " errors." << endl;
+    } else {
+        cout << "\tSuccess!" << endl;
+    }
+}
+
+int main(int argc, const char * argv[]) {
+    test(Oldmul8x8Div255, "Oldmul8x8Div255");
+    test(Mul8x8Div255_1, "Mul8x8Div255_1");
+    test(Mul8x8Div255_2, "Mul8x8Div255_2");
+    test(Mul8x8Div255_3, "Mul8x8Div255_3");
+    test(Mul8x8Div255_4, "Mul8x8Div255_4");
+    test(Mul8x8Div255_5, "Mul8x8Div255_5");
+    testProof();
+    test(Mul8x8Div255, "Mul8x8Div255");
+
+    return 0;
+}
+
+#endif
+
+#if 0
+
+#include <adobe/selection.hpp>
+#include <tuple>
+
+namespace adobe {
+
+template <typename I, typename N> // I models ForwardIterator
+std::pair<I, N> find_sequence_end(I f, I l, N n) {
+    while (f != l && n == *f) {
+        ++n;
+        ++f;
+    }
+    return { f, n };
+}
+
+/*
+    \pre [f, l) is a sorted (strictly increasing) set of of indices
+*/
+
+template <typename I, // I models ForwardIterator
+          typename O> // O models OutputIterator
+O index_set_to_selection(I f, I l, O out) {
+    while (f != l) {
+        auto n = *f;
+        *out++ = n;
+        ++f; ++n;
+        std::tie(f, n) = find_sequence_end(f, l, n);
+        *out++ = n;
+    }
+    return out;
+}
+
+} // namespace adobe
+
+#include <iostream>
+
+using namespace std;
+
+int x = []{
+    cout << "Hello World!" << endl;
+    return 52;
+}();
+
+int main() {
+    int a[] = { 3, 4, 5, 10, 15, 16, 27, 28 };
+    adobe::selection_t s;
+    adobe::index_set_to_selection(std::begin(a), std::end(a), std::back_inserter(s));
+    for (const auto& e : s) {
+        cout << e << endl;
+    }
+}
+
+#endif
+
+
+
+
+
+#if 0
+#include <string>
+#include <vector>
+#include <memory>
+#include <iostream>
+
+using namespace std;
+
+struct foo // implements ProviderInterface
+{
+    static string getProviderId() { return "foo::getProviderId"; }
+};
+ 
+struct bar // also implements ProviderInterface
+{
+    static string getProviderId() { return "bar::getProviderId"; }
+};
+
+class any_provider_interface {
+ public:
+    any_provider_interface(int type) {
+        switch(type) {
+        case 0: _model = make_shared<model<foo>>(); break;
+        case 1: _model = make_shared<model<bar>>(); break;
+        }
+    }
+
+    string getProviderId() const { return _model->getProviderId(); }
+ private:
+    struct concept {
+        virtual ~concept() { }
+        virtual string getProviderId() const = 0;
+    };
+
+    template <typename T>
+    struct model : concept {
+        string getProviderId() const override {
+            return T::getProviderId();
+        }
+    };
+
+    shared_ptr<const concept> _model;
+
+};
+ 
+
+// caller
+
+int main() {
+    any_provider_interface pi(0);
+    cout << pi.getProviderId() << endl;
+    cout << (0 ? true : false) << endl;
+    cout << ((0) ? true : false) << endl;
+}
+
+#endif
+
+#if 0
+
+#include <functional>
+#include <vector>
+#include <iostream>
+
+int main() {
+    std::vector<bool> x = {
+        1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+        0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+        0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+        0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0
+    };
+
+    auto y = std::hash<std::vector<bool>>()(x);
+    std::cout << y << std::endl;
+}
+
+
+
+template <typename I, // I models RandomAccessIterator
+          typename P> // P models UnaryPredicate
+I stable_partition(I f, I l, P p) {
+    auto n = distance(f, l);
+
+    if (n == 0) return f;
+    if (n == 1) return f + p(*f);
+
+    auto m = f + n / 2;
+
+    return rotate(stable_partition(f, m, p),
+                  m,
+                  stable_partition(m, l, p));
+}
+
+template <typename I,
+          typename P>
+auto stable_partition_position(I f, I l, P p) -> I
+{
+    auto n = l - f;
+    if (n == 0) return f;
+    if (n == 1) return f + p(f);
+    
+    auto m = f + (n / 2);
+
+    return rotate(stable_partition_position(f, m, p),
+                  m,
+                  stable_partition_position(m, l, p));
+}
+
+
+template <typename I> // I models RandomAccessIterator
+void sort_subrange(I f, I l, I sf, I sl)
+{
+    if (sf == sl) return;
+    if (f != sf) {
+        nth_element(f, sf, l);
+        ++sf;
+    }
+    partial_sort(sf, sl, l);
+}
+
+#endif
+
+#if 0
+
+#include <deque>
+#include <mutex>
+#include <tuple>
+#include <thread>
+#include <iostream>
+
+#include <stlab/channel.hpp>
+#include <boost/optional.hpp>
+
+using namespace stlab;
+using namespace std;
+using namespace boost;
+
+struct sum {
+    process_state _state = process_state::await;
+    int _sum = 0;
+
+    void await(int n) { _sum += n; }
+
+    int yield() { _state = process_state::await; return _sum; }
+
+    void close() { _state = process_state::yield; }
+
+    auto state() const { return _state; }
+};
+
+
+int main() {
+
+    sender<int> send;
+    receiver<int> receive;
+
+    tie(send, receive) = channel<int>();
+
+    auto hold = receive
+        | sum()
+        | [](int x){ cout << x << '\n'; };
+
+    receive.set_ready();
+
+    send(1);
+    send(2);
+    send(3);
+    send.close();
+
+    sleep(5);
+}
+
+#endif
+
+
+#if 0
+
+int main() {
+
+    channel<int> send;
+
+    auto hold = send
+        | [](const receiver<int>& r) {
+            int sum = 0;
+            while(auto v = await r) {
+                sum += v.get();
+            }
+            return sum;
+        }
+        | [](int x){ cout << x << '\n'; };
+
+    send(1);
+    send(2);
+    send(3);
+    send.close();
+
+    sleep(5);
+}
+#endif
+
+
+#if 0
+
+#include <adobe/forest.hpp>
+#include <string>
+#include <iostream>
+
+using namespace adobe;
+using namespace std;
+
+int main() {
+    forest<string> x;
+
+    auto a = x.insert(end(x), "A");
+    x.insert(end(x), "E");
+
+    x.insert(end(a), "B");
+    x.insert(end(a), "C");
+    x.insert(end(a), "D");
+
+    auto r = depth_range(x);
+    for (auto f = begin(r), l = end(r); f != l; ++f) {
+        cout << string(f.depth() * 4, ' ') << (f.edge() ? "<" : "</") << *f << ">\n";
+    }
+}
+
+#endif
+
+
+#if 0
+
+#include <future>
+
+using namespace std;
+
+template <typename T> // T models Promise
+struct coroutine_handle {
+    T _promise;
+
+    static
+};
+
+struct MyCoro {
+    struct promise_type {
+    };
+};
+
+/*
+    The only way I can figure out how to construct a coroutine_handle is to inherit from the
+    promise_type.
+*/
+
+template <typename T> // T models promise
+struct manual_coroutine : T {
+    void operator()() const {
+
+    }
+};
+
+MyCoro coroutine(future<int> x) {
+    using promise_type = MyCoro::promise_type;
+    return coroutine_handle<promise_type>::from_promise(manual_coroutine<promise_type>());
+}
+
+#endif
+#if 0
+#include <iostream>
+
+using namespace std;
+
+// void f(int x) { x = 5; cout << "void f(int x) -> " << x << endl; }
+void f(const int x){ cout << "void f(const int x) -> " << x << endl; }
+
+
+int main() {
+    f(10);
+}
+#endif
+
+
+#if 0
+using connection = void;
+
+class surface {
+    template <typename T>
+    void signal(const char* property, T value);
+
+    template <typename F> // F has signature void(T) where T is the property type
+    connection connect(const char* property, F callback);
+};
+
+#endif
+
+#if 0
+
+#include <deque>
+#include <mutex>
+#include <tuple>
+#include <thread>
+
+#include <stlab/channel.hpp>
+
+using namespace stlab;
+using namespace std;
+
+struct scheduler {
+    using result_type = void;
+    using lock_t = std::unique_lock<std::mutex>;
+    using function_t = std::function<void()>;
+
+    template <typename F>
+    void operator()(F f) {
+        {
+        lock_t _lock(_mutex);
+        _queue.emplace_back(f);
+        }
+        _ready.notify_one();
+    }
+
+    static function_t pop() {
+        lock_t _lock(_mutex);
+        while (_queue.empty()) _ready.wait(_lock);
+        auto result = std::move(_queue.back());
+        _queue.pop_back();
+        return result;
+    }
+
+    [[noreturn]] static void run() {
+        while (true) {
+            pop()();
+        }
+    }
+
+    static std::condition_variable      _ready;
+    static std::mutex                   _mutex;
+    static std::deque<function<void()>> _queue;
+};
+
+std::condition_variable      scheduler::_ready;
+std::mutex                   scheduler::_mutex;
+std::deque<function<void()>> scheduler::_queue;
+
+int main() {
+
+    sender<int> send;
+    receiver<void> cap;
+
+    {
+    receiver<int> receive;
+
+    tie(send, receive) = channel<int>(scheduler());
+    }
+
+    auto thread = std::thread(&scheduler::run);
+    thread.join(); // never to return
+}
+
+#endif
+
+
+#if 0
+#include <cstdint>
+#include <cassert>
+#include <utility>
+
+namespace std {
+inline namespace stlab {
+
+using max_align_t = double;
+
+template <std::size_t Len, std::size_t Align>
+struct aligned_storage {
+    typedef struct {
+        alignas(Align) unsigned char data[Len];
+    } type;
+};
+
+template <std::size_t Len, std::size_t Align = alignof(double)>
+using aligned_storage_t = typename std::stlab::aligned_storage<Len, Align>::type;
+
+} // namespace stlab
+} // namespace std
+
+template <typename T, std::size_t Align = sizeof(T)>
+class aligned_large {
+    static constexpr auto _max_align = alignof(max_align_t);
+    static constexpr auto _max_pad = (Align < _max_align) ? 0 : Align - _max_align ;
+
+    std::stlab::aligned_storage_t<sizeof(T) + _max_pad, _max_align>  _data;
+
+    auto pad() const { return Align - reinterpret_cast<std::uintptr_t>(this) % Align; }
+
+  public:
+    template <typename... Args>
+    aligned_large(Args... args) {
+        assert((pad() <= _max_pad) && "pad() is greater than _max_pad!");
+        new(reinterpret_cast<char*>(&_data) + pad()) T(std::forward<Args>(args)...);
+    }
+    ~aligned_large() {
+        get().~T();
+    }
+
+    T& get() {
+        return *reinterpret_cast<T*>(reinterpret_cast<char*>(&_data) + pad());
+    }
+
+    const T& get() const {
+        return *reinterpret_cast<const T*>(reinterpret_cast<const char*>(&_data) + pad());
+    }
+};
+
+#include <iostream>
+using namespace std;
+
+int main() {
+    struct avx_vector { char data_ [256]; };
+
+    avx_vector unaligned;
+    aligned_large<avx_vector> aligned;
+
+    cout << "unaligned: " << &unaligned.data_  << endl;
+    cout << "aligned: " << &aligned.get().data_ << endl;
+
+};
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+#include <tuple>
+
+#include <stlab/channel.hpp>
+
+using namespace stlab;
+using namespace std;
+
+int main() {
+
+    sender<int> send;
+    receiver<void> cap;
+
+    {
+    receiver<int> receive;
+
+    tie(send, receive) = channel<int>();
+
+    cap = receive
+        | [](int a) { cout << "a: " << a << endl; return a * 2; }
+        | [](int b) { sleep(1); cout << "b: " << b << endl; };
+    }
+
+    for (int n = 0; n != 10; ++n) {
+        send(n);
+    }
+
+    send.close();
+
+    // Wait for everthing to execute (just for demonstration)
+    sleep(100);
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+
+using namespace std;
+
+void print_string(const char* s) {
+    while (*s != '\0') {
+        cout << *s++;
+    }
+}
+
+int* lower_bound(int* first, int* last, int value)
+{
+    while (first != last) {
+        int* middle = first + (last - first) / 2;
+        if (*middle < value) first = middle + 1;
+        else last = middle;
+    }
+    return first;
+}
+
+int Search(int N, const int* b, int x)
+{
+    return int(lower_bound(b, b + N, x) - b);
+}
+
+int main() {
+    int a[] = { 0, 1, 1, 3, 3, 4, 5, 6, 6, 8 };
+    int* p = lower_bound(begin(a), end(a), 6);
+    cout << "lower_bound: a[" << p - begin(a) << "] == " << *p << endl;
+}
+
+#endif
+
+#if 0
+#include <iostream>
+#include <algorithm>
+#include <utility>
+#include <string>
+#include <cassert>
+#include <iterator>
+#include <cstdint>
+#include <vector>
+#include <adobe/unicode.hpp>
+
+using namespace std;
+
+namespace stlab {
+
+template <class T, class InputIterator, class OutputIterator>
+OutputIterator copy_utf(InputIterator first, InputIterator last, OutputIterator result);
+
+template <class ForwardIterator, class T, class Compare>
+ForwardIterator lower_bound(ForwardIterator first, ForwardIterator last,
+        const T& value, Compare comp)
+{
+    auto n = distance(first, last);
+
+    while (n != 0)  {
+        auto h = n / 2;
+        auto m = next(first, h);
+
+        if (comp(*m, value)) {
+            first = next(m);
+            n -= h + 1;
+        } else { n = h; }
+    }
+
+    return first;
+}
+
+#if 0
+template <class ForwardIterator, class T, class Compare>
+ForwardIterator lower_bound(ForwardIterator first, ForwardIterator last,
+        const T& value, Compare comp)
+{
+    auto n = distance(first, last);
+
+    while (n != 0)  {
+        auto h = n / 2;
+        auto m = next(first, h);
+
+        if (comp(*m, value)) {
+            first = next(m);
+            n -= h + 1;
+        } else { n = h; }
+    }
+
+    return first;
+}
+#endif
+
+template <class ForwardIterator>
+void reverse(ForwardIterator f, ForwardIterator l) {
+    auto n = distance(f, l);
+
+    if (n == 0 || n == 1) return;
+
+    auto m = next(f, n / 2);
+
+    reverse(f, m);
+    reverse(m, l);
+    rotate(f, m, l);
+}
+
+} // namespace
+
+template <class T>
+const T& max(const T& a) { return a; }
+
+template <class T>
+const T& max(const T& a, const T& b) { return (b < a) ? a : b; }
+
+//template <class T> const T& max(const T& a, const T& b, const T& c);
+
+template<class T, class... Args> const T& max(const T& a, const Args&... args) {
+    return ::max(a, ::max(args...));
+}
+
+template <class T>
+void a(T& x) { x = f(x); } // action from transformation
+
+template <class T>
+T f(T x) { a(x); return x; } // transformation from action
+
+template<typename T, typename Compare>
+const T& clamp(const T& a, const T& lo, const T& hi, Compare comp)
+{
+    return min(max(lo, a, comp), hi, comp);
+}
+
+int main() {
+    const char str[] = u8"Hello World!";
+    vector<uint16_t> out;
+    adobe::copy_utf<uint16_t>(begin(str), end(str), back_inserter(out));
+
+    int a0[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    cout << "lower: " << *std::lower_bound(begin(a0), end(a0), 3, std::less<>()) << endl;
+    stlab::reverse(begin(a0), end(a0));
+    for(const auto& e : a0) cout << e << endl;
+
+    cout << max(0, 1, 2, 5, 4, 3) << endl;
+    
+    using pair = pair<int, string>;
+
+    pair a = { 1, "OK" };
+
+    pair lo = { 1, "FAIL: LO" };
+    pair hi = { 2, "FAIL: HI" };
+
+    a = clamp(a, lo, hi, [](const auto& a, const auto& b) {
+        return a.first < b.first;
+    });
+
+    cout << a.second << endl;
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <algorithm>
+#include <utility>
+#include <string>
+#include <cassert>
+
+using namespace std;
+
+#if 0
+template <typename T>
+const T& max(const T& a, const T& b) {
+    return (a < b) ? b : a;
+}
+
+template <typename T>
+const T& min(const T& a, const T& b) {
+    return (b < a) ? b : a;
+}
+#endif
+
+
+template<typename T, typename O>
+const T& clamp(const T& a, const T& lo, const T& hi, Compare comp)
+{
+    return min(max(lo, a, comp), hi, comp);
+}
+
+template<class T> const T& min(const T& a, const T& b);
+template<class T> const T& max(const T& a, const T& b);
+
+#if 0
+template <typename T, typename O>
+const T& median(const T& a, const T& b, const T& c, const O& o) {
+    // return min(max(a, b, o), c, o);
+    return max(a, min(b, c, o), o);
+}
+
+#endif
+
+
+int main() {
+    using p = pair<int, string>;
+
+    {
+    p x = { 1, "OK" };
+
+    p f = { 0, "WRONG (LO)" };
+    p l = { 2, "WRONG (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+    {
+    p x = { 0, "OK" };
+
+    p f = { 0, "WRONG (LO)" };
+    p l = { 2, "WRONG (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+    {
+    p x = { 2, "OK" };
+
+    p f = { 0, "WRONG (LO)" };
+    p l = { 2, "WRONG (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+    {
+    p x = { 0, "OK" };
+
+    p f = { 0, "WRONG (LO)" };
+    p l = { 0, "WRONG (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+    {
+    p x = { 0, "WRONG" };
+
+    p f = { 1, "OK (LO)" };
+    p l = { 2, "WRONG (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+    {
+    p x = { 3, "WRONG" };
+
+    p f = { 1, "WRONG (LO)" };
+    p l = { 2, "OK (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+    {
+    p x = { 0, "WRONG" };
+
+    p f = { 1, "OK (LO)" };
+    p l = { 1, "WRONG (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+    {
+    p x = { 3, "WRONG" };
+
+    p f = { 1, "WRONG (LO)" };
+    p l = { 1, "OK (Hi)" };
+
+    x = clamp(x, f, l, [](auto x, auto y){ return x.first < y.first; });
+    cout << x.second << endl;
+    }
+
+
+
+#if 0
+    {
+    p a = { 0, "a" };
+    p b = { 1, "b" };
+    p c = { 2, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 0, "a" };
+    p b = { 0, "b" };
+    p c = { 2, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 0, "a" };
+    p b = { 2, "b" };
+    p c = { 2, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 0, "a" };
+    p b = { 0, "b" };
+    p c = { 0, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 0, "a" };
+    p b = { 1, "b" };
+    p c = { 0, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 2, "a" };
+    p b = { 1, "mid" };
+    p c = { 0, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 0, "a" };
+    p b = { 2, "b" };
+    p c = { 1, "mid" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 1, "mid" };
+    p b = { 2, "b" };
+    p c = { 0, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 1, "mid" };
+    p b = { 0, "b" };
+    p c = { 2, "c" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+
+    {
+    p a = { 2, "a" };
+    p b = { 0, "b" };
+    p c = { 1, "mid" };
+    b = median(a, b, c, [](auto x, auto y){ return x.first < y.first; });
+    cout << b.second << endl;
+    }
+#endif
+
+
+}
+
+#endif
+
+
+#if 0
+#include <iostream>
+#include <vector>
+
+struct test {
+    int a[0];
+};
+
+struct empty { };
+
+void f() {
+    return void();
+}
+
+using namespace std;
+int main() {
+    f();
+    // void x = f();
+    {
+    int x;
+    cout << x << endl;
+    }
+
+    {
+    int x = 1 / 0;
+    cout << x << endl;
+    }
+    {
+    double x = 0.0 / 0.0;
+    cout << x << endl;
+    }
+    {
+    double x = 1.0 / 0.0;
+    cout << x << endl;
+    }
+    {
+    int a[0];
+    cout << a << endl;
+    }
+    {
+    int a[0];
+    int b;
+    cout << a << "\n" << &b << "\n" << endl;
+    }
+    {
+    struct empty {};
+    cout << sizeof(empty) << endl;
+    }
+    {
+    using empty = int[0];
+    empty a[2];
+    cout << sizeof(a) << endl;
+    cout << &a[0] << endl;
+    cout << &a[1] << endl;
+    }
+    {
+    std::vector<int> x = { 1, 2, 3 };
+    try {
+        x.insert(x.begin(), 0);
+    } catch (...) {
+        std::cout << x.size() << std::endl;
+    }
+
+    std::vector<int> y = std::move(x);
+
+    // cout << 10 / y[0] << endl;
+    }
+
+    {
+    }
+
+}
+
+#endif
+
+
+#if 0
+#include <typeinfo>
+#include <cassert>
+#include <utility>
+#include <memory>
+#include <iostream>
+
+template <typename T>
+auto test_equal(decltype(std::declval<T>() == std::declval<T>())) -> std::true_type;
+
+template <typename>
+auto test_equal(...) -> std::false_type;
+
+template <typename T>
+constexpr bool has_equal = decltype(test_equal<T>(0))::value;
+
+template <typename T, typename = void>
+class indirect;
+
+template <typename T>
+class indirect<T, std::enable_if_t<has_equal<T>>> {
+    struct concept {
+        virtual ~concept() = default;
+        virtual bool equal(const concept&) const = 0;
+        virtual std::unique_ptr<concept> copy() const = 0;
+    };
+    template <typename U>
+    struct model : concept {
+        model(std::unique_ptr<U> x) : _value(std::move(x)) { }
+
+        bool equal(const concept& x) const override {
+            if (typeid(x) != typeid(model)) return false;
+            return static_cast<const model&>(x)._value == _value;
+        }
+        std::unique_ptr<concept> copy() const override {
+            return std::make_unique<model>(std::make_unique<U>(_value));
+        }
+
+        std::unique_ptr<U> _value;
+    };
+
+    std::unique_ptr<concept> _self;
+  public:
+    template <typename U>
+    indirect(const U* p) : _self(std::make_unique<model<U>>(p)) {
+        assert(typeid(*p) == typeid(U)
+            && "WARNING (sparent): indirect of derived class will slice on copy.");
+    }
+
+    template <typename U>
+    indirect(const U& x) : _self(std::make_unique<model<U>>(std::make_unique<U>(x))) { }
+};
+
+struct A { virtual ~A() = default; };
+struct B : A { };
+
+int main() {
+    indirect<int> a = 10;
+
+    std::cout << has_equal<A> << std::endl;
+
+    A* x = new B();
+    assert(typeid(*x) == typeid(B));
+    // assert(typeid(*x) == typeid(A));
+}
+
+#endif
+
+#if 0
+#include <stlab/channel.hpp>
+#include <stlab/future.hpp>
+
+#include <iostream>
+#include <string>
+#include <utility>
+#include <vector>
+
+using namespace std;
+using namespace stlab;
+
+/*
+    sum is an example of an accumulating "co-routine". It will await for values, keeping an 
+    internal sum, until the channel is closed and then it will yield the result as a string.
+*/
+struct sum {
+    process_state _state = process_state::await;
+    int _sum = 0;
+
+    void await(int n) { _sum += n; }
+
+    int yield() { _state = process_state::await; return _sum; }
+
+    void close() { _state = process_state::yield; }
+
+    auto state() const { return _state; }
+};
+
+int main() {
+    /*
+        Create a channel to aggregate our values.
+    */
+    sender<int> aggregate;
+    receiver<int> receiver;
+    tie(aggregate, receiver) = channel<int>();
+
+    /*
+        Create a vector to hold all the futures for each result as it is piped to channel.
+        The future is of type <void> because the value is passed into the channel.
+    */
+    vector<stlab::future<void>> results;
+
+    for (int n = 0; n != 10; ++n) {
+        // Asyncrounously generate a bunch of values.
+        results.emplace_back(async(default_scheduler(), [_n = n]{ return _n; })
+            // Then send those values into a copy of the channel
+            .then([_aggregate = aggregate](int n) {
+                _aggregate(n);
+            }));
+    }
+    // Now it is safe to close (or destruct) this channel, all the copies remain open.
+    aggregate.close();
+
+    auto pipe = receiver
+        /*
+            The receiver is our common end point - we attach the vector of futures to it (another)
+            inefficiency here - this is a lambda whose only purpose is to hold the vector of
+            futures.
+        */
+        | [ _results = move(results) ](auto x){ return x; }
+        // Then we can pipe the values to our accumulator
+        | sum()
+        // And pipe the final value to a lambda to print it.
+        // Returning void from the pipe will mark it as ready.
+        | [](auto x){ cout << x << endl; };
+
+    receiver.set_ready(); // close this end of the pipe
+
+    // Wait for everthing to execute (just for demonstration)
+    sleep(100);
+}
+#endif
+
+
+#if 0
+#include <iostream>
+#include <string>
+#include <cstdlib>
+#include <unistd.h>
+
+using namespace std;
+
+string get_field() {
+    string result;
+    bool quote = false;
+    while (!cin.eof()) {
+        char c = cin.get();
+        if (c == '\0') continue;
+        if (c == '\xC2') continue;
+        if (c == '\t') break;
+        if (c == '\xAC') {
+            result += '\n'; quote = true;
+        } else if (c == '\xBB') {
+            result += '\t';
+        } else if (c == ',') { result += ','; quote = true; }
+        else if (c == '"') { result += "\"\""; quote = true; }
+        else result += c;
+    }
+    if (quote) result = "\"" + result + "\"";
+    return result;
+}
+
+void get_eol() {
+    while (!cin.eof()) {
+        char c = cin.get();
+        if (c == '\n') break;
+    }
+}
+
+int main() {
+    sleep(5); // debugger attach
+
+    cout << "url,username,password,extra,name,grouping,type,hostname" << endl;
+
+    while (!cin.eof()) {
+        string title = get_field();
+        string url = get_field();
+        string username = get_field();
+        string password = get_field();
+        string notes = get_field();
+        string category = get_field();
+        string browser = get_field();
+        get_eol();
+        if (url == "") {
+            if (username == "" && password == "") url = "http://sn";
+            else url = "http://unknown";
+        }
+        cout << url << "," << username << "," << password << "," << notes << "," << title << ","
+            << category << "," /* type */ << "," /* hostname */ << endl;
+    }
+
+#if 0
+    while (getline(cin, x, '\t')) {
+        cout << x << endl;
+    }
+#endif
+}
+
+#endif
+
+#if 0
+
+#include <adobe/forest.hpp>
+#include <iostream>
+#include <algorithm>
+#include <utility>
+#include <iterator>
+
+using namespace std;
+using namespace adobe;
+
+template <typename I> // I is a depth adaptor range iterator
+void output(I& f, I& l)
+{
+    while (f != l) {
+        for (auto i = f.depth(); i != 0; --i) cout << "\t";
+
+        if (f.edge() == forest_leading_edge) cout << "<" << *f << ">" << endl;
+        else cout << "</" << *f << ">" << endl;
+
+        ++f;
+    }
+}
+
+template <typename R>
+void output_new(const R& r) {
+    for (auto f = boost::begin(r), l = boost::end(r); f != l; ++f) {
+        for (auto i = f.base().depth(); i != 0; --i) cout << "\t";
+        cout << *f << endl;
+    }
+}
+
+int main() {
+    forest<string> f;
+    auto i (f.begin());
+    i = adobe::trailing_of(f.insert(i, "grandmother"));
+    {
+        auto p = adobe::trailing_of(f.insert(i, "mother"));
+        f.insert(p, "me");
+        f.insert(p, "sister");
+        f.insert(p, "brother");
+    }
+    {
+        auto p = adobe::trailing_of(f.insert(i, "aunt"));
+        f.insert(p, "cousin");
+    }
+    f.insert(i, "uncle");
+
+    output_new(preorder_range(depth_range(f)));
+    //output(r.first, r.second);
+}
+
+#endif
+
+#if 0
+
+#include "adobe/forest.hpp"
+
+#include <iostream>
+#include <list>
+
+bool activate = false;
+
+class test {
+public:
+  test(int d) : data_(d) { std::cout << "create " << data_ << std::endl; }
+  test(const test& o) : data_(o.data_) {
+    std::cout << "copy c " << data_ << std::endl;
+    if (activate && data_ == 2) {
+      std::cout << "throw " << data_ << std::endl;
+      throw 0;
+    }
+  }
+  test& operator=(const test& o) {
+    data_ = o.data_;
+    std::cout << "copy = " << data_ << std::endl;
+    return *this;
+  }
+  ~test() { std::cout << "delete " << data_ << std::endl; }
+private:
+  friend std::ostream& operator<<(std::ostream& out, const test& o);
+
+  int data_;
+};
+
+std::ostream& operator<<(std::ostream& out, const test& o) {
+  out << o.data_;
+  return out;
+}
+
+template<class T>
+void x() try {
+  using forest = T;
+
+  forest f1;
+  f1.push_back(1);
+  f1.push_back(2);
+  f1.push_back(3);
+
+  activate = true;
+
+  forest f(f1);
+} catch(...) { activate = false; }
+
+int main() {
+  std::cout << "adobe::forest" << std::endl;
+  x<adobe::forest<test>>();
+  std::cout << "std::list" << std::endl;
+  x<std::list<test>>();
+}
+
+#endif
+
+#if 0
+
+#include <stlab/future.hpp>
+#include <iostream>
+
+using namespace stlab;
+using namespace std;
+
+/**************************************************************************************************/
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+struct identity_t {
+    template <typename T>
+    T operator()(T x) const { return x; };
+};
+
+constexpr auto identity = identity_t();
+
+int main() {
+    identity(annotate());
+
+    auto x = package<int()>(default_scheduler(), []{ return 42; });
+    auto y = package<int()>(default_scheduler(), []{ throw 42; return 3; });
+    auto w = stlab::when_all(default_scheduler(), [](int x, int y) {
+        cout << x << ", " << y << endl;
+    }, x.second, y.second);
+
+    x.first();
+    y.first();
+
+    try {
+        while (!w.get_try()) ;
+    } catch(...) {
+        cout << "exception" << endl;
+    }
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <type_traits>
+
+// Define an attribute with default value
+
+template <typename T, T x>
+struct is_override : std::false_type { };
+
+template <typename T, T x>
+constexpr bool is_override_t = is_override<T, x>::value;
+
+// Example useage
+
+struct test {
+    void member();
+    void member2();
+};
+
+// Set the attribute for one member function
+
+template <>
+struct is_override<decltype(&test::member), &test::member> : std::true_type { };
+
+int main() {
+    std::cout << is_override_t<decltype(&test::member), &test::member> << std::endl;
+    std::cout << is_override_t<decltype(&test::member2), &test::member2> << std::endl;
+}
+
+
+#endif
+
+#if 0
+#include <algorithm>
+#include <iostream>
+
+using namespace std;
+
+template <typename I, // I models ForwardIterator
+          typename P, // P models UnaryPredicate
+          typename F, // F models UnaryFunction
+          typename Final> // Final models UnaryFunction
+void for_each_if_final(I f, I l, P pred, F op, Final final) {
+    auto prior = find_if(f, l, pred);
+    if (prior == l) return;
+    f = find_if(next(prior), l, pred);
+
+    while (f != l) {
+        op(*prior);
+        prior = f;
+        f = find_if(next(prior), l, pred);
+    }
+
+    final(*prior);
+}
+
+int main() {
+    {
+    int a[] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    cout << "(";
+    for_each_if_final(begin(a), end(a), [](int x){ return x & 1; },
+        [](int x) { cout << x << ", "; },
+        [](int x) { cout << x; });
+    cout << ")" << endl;;
+    }
+    {
+    int a[] = { 0 };
+    cout << "(";
+    for_each_if_final(begin(a), end(a), [](int x){ return x & 1; },
+        [](int x) { cout << x << ", "; },
+        [](int x) { cout << x; });
+    cout << ")" << endl;;
+    }
+    {
+    int a[] = { 0, 1 };
+    cout << "(";
+    for_each_if_final(begin(a), end(a), [](int x){ return x & 1; },
+        [](int x) { cout << x << ", "; },
+        [](int x) { cout << x; });
+    cout << ")" << endl;;
+    }
+}
+#endif
+
+#if 0
+
+#include <stlab/channel.hpp>
+#include <stlab/future.hpp>
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+using namespace std;
+using namespace stlab;
+
+/**************************************************************************************************/
+
+struct iota {
+	int _count;
+	int _n;
+	process_state _state = process_state::await;
+
+	void await(int n) {
+		_count = 0;
+		_n = n;
+		if (_count != _n) _state = process_state::yield;
+	}
+
+	int yield() {
+		int result = _count;
+		++_count;
+		_state = (_count != _n) ? process_state::yield : process_state::await;
+        return result;
+	}
+
+    void close() { }
+
+	process_state state() const { return _state; }
+};
+
+struct word {
+    string _word;
+    process_state _state = process_state::await;
+
+    void await(char x) {
+        if (x == ' ' || x == '\0') _state = process_state::yield;
+        else _word += x;
+    }
+
+    string yield() {
+        _state = process_state::await;
+        string result;
+        swap(_word, result);
+        return result;
+    }
+
+    void close() {
+        if (!_word.empty()) _state = process_state::yield;
+    }
+
+    process_state state() const { return _state; }
+};
+
+struct line {
+    const size_t length = 30;
+    string _line;
+    string _result;
+    process_state _state = process_state::await;
+
+    using signature = string(string);
+
+    void await(string x) {
+        if ((length - _line.size() < x.size()) || x.size() == 0) {
+            _result = move(_line);
+            _line = move(x);
+            _state = process_state::yield;
+        } else _line += x;
+    }
+
+    string yield() {
+        _state = process_state::await;
+        return move(_result);
+    }
+
+    void close() {
+        if (!_line.empty()) {
+            _result = move(_line);
+            _state = process_state::yield;
+        }
+    }
+
+    process_state state() const { return _state; }
+};
+
+class empty { };
+
+
+/*
+    sum is an example of an accumulating "co-routine". It will await for values, keeping an 
+    internal sum, until the channel is closed and then it will yield the result as a string.
+*/
+struct sum {
+    process_state _state = process_state::await;
+    int _sum = 0;
+
+    void await(int n) { _sum += n; }
+
+    string yield() { _state = process_state::await; return to_string(_sum); }
+
+    void close() { _state = process_state::yield; }
+
+    process_state state() const { return _state; }
+};
+
+int main() {
+    auto a1 = stlab::async(default_scheduler(), [](){ return 1; });
+    auto a2 = stlab::async(default_scheduler(), [](){ return 2; });
+    auto a4 = when_all(default_scheduler(), [](auto x, auto y){
+        cout << x << ", " << y << endl;
+    }, a1, a2);
+
+    sleep(10);
+
+
+    sender<int> aggregate; // create a channel that we will use to accumulate values
+    receiver<int> receiver;
+
+    tie(aggregate, receiver) = channel<int>();
+
+
+    /*
+        Create a vector to hold all the futures for each result as it is piped to channel.
+        The future is of type <void> because the value is passed into the channel.
+    */
+    vector<stlab::future<void>> results;
+
+    for (int n = 0; n != 100; ++n) {
+        // Asyncrounously generate a bunch of values.
+        results.emplace_back(async(default_scheduler(), [_n = n]{ return _n; })
+            // Then send those values into a copy of the channel
+            .then([_aggregate = aggregate](int n){ _aggregate(n); }));
+    }
+    // Now it is safe to close (or destruct) this channel, all the copies remain open.
+    aggregate.close();
+
+    /*
+        REVISIT (sparent) : currently doesn't work - you can't append the pipe 
+        after without losing data.
+    */
+    
+    //sleep(3); // SHOW THE BUG!
+    auto pipe = receiver
+        /*
+            The receiver is our common end point - we attach the vector of futures to it (another)
+            inefficiency here - this is a lambda whose only purpose is to hold the vector of
+            futures.
+        */
+        | [ _results = move(results) ](auto x){ return x; }
+        // Then we can pipe the values to our accumulator
+        | sum()
+        // And pipe the final value to a lambda to print it.
+        | [](string s){ cout << s << endl; };
+
+    receiver.set_ready();
+
+    // Wait for everthing to execute (just for demonstration)
+    sleep(1000);
+
+
+#if 0
+
+    channel<char> sender;
+
+    auto receiver = sender | word() | line() | [](auto x){
+        cout << x << endl;
+    };
+
+    for (char e : "This is a very very very long, as in supper long string, that needs to be formatted.") {
+        sender(e);
+    }
+    sender.close();
+    
+    sleep(100);
+#endif
+}
+
+#endif
+
+#if 0
+
+template <typename I>
+std::size_t maximum_overlap(I f, I l, std::size_t n) {
+    std::vector<std::pair<std::tuple_element_t<0, I>, bool>> sorted;
+    while (f != l && n != 0) {
+        sorted.emplace_back(get<0>(*f), true);
+        sorted.emplace_back(get<1>(*f), false);
+        ++f; --n;
+    }
+    std::make_heap(begin(sorted), end(sorted));
+    
+}
+#endif
+
+
+
+
+
+#if 0
+#include <iostream>
+#include <memory>
+#include <deque>
+#include <thread>
+#include <utility>
+#include <stlab/future.hpp>
+
+#include <boost/optional.hpp>
+
+using namespace stlab;
+using namespace std;
+using namespace boost;
+
+/**************************************************************************************************/
+
+namespace stlab {
+
+/**************************************************************************************************/
+
+template <typename> class channel;
+template <typename> class receiver;
+
+/**************************************************************************************************/
+
+namespace detail {
+
+/**************************************************************************************************/
+
+// REVISIT (sparent) : I have a make_weak_ptr() someplace already. Should be in memory.hpp
+
+template <typename T>
+auto make_weak_ptr(const std::shared_ptr<T>& x) { return std::weak_ptr<T>(x); }
+
+/**************************************************************************************************/
+
+template <typename> struct shared_channel_base;
+template <typename> struct shared_channel;
+
+/**************************************************************************************************/
+
+// This is overwrite, we also need queue.
+template <typename T>
+struct shared_channel_base : std::enable_shared_from_this<shared_channel_base<T>> {
+    using map_t = std::vector<std::function<void(T)>>;
+
+    // how to propogate errors?
+    std::mutex                          _map_mutex;
+    map_t                               _map;
+
+    std::function<void()>               _cts; // clear to send signal
+
+    bool                                   _ready = true;
+    bool                                   _hold = false;
+    std::deque<std::function<void()>>      _message_queue;
+    std::mutex                             _message_mutex;
+
+    virtual ~shared_channel_base() { }
+    virtual void task_continue() = 0;
+
+    template<typename F>
+    auto map(F&& f) {
+        using signature_type = typename F::signature_type;
+        auto p = std::make_shared<detail::shared_channel<signature_type>>(std::move(f),
+                [_p = this->shared_from_this()](){ _p->task_continue(); });
+
+        {
+        std::unique_lock<std::mutex> lock(_map_mutex);
+        _map.emplace_back([_p = make_weak_ptr(p), _hold = this->shared_from_this()](auto&& x){
+            auto p = _p.lock();
+            if (p) (*p)(std::forward<decltype(x)>(x));
+        });
+        }
+
+        return receiver<result_of_t_<signature_type>>(p);
+    }
+
+    template <typename P>
+    bool task_done(const P& p) {
+        if (!p->_process.done()) return false;
+
+        bool ready;
+        {
+        std::unique_lock<std::mutex> lock(_message_mutex);
+        ready = _message_queue.empty();
+        _ready = ready;
+        }
+        if (ready) return true;
+        task_chain(p);
+        return true;
+    }
+
+    template <typename P>
+    void task_body(const P& p) {
+        // interuptable - check for message at each step
+        bool hold = false;
+        std::function<void()> message;
+        {
+            std::unique_lock<std::mutex> lock(_message_mutex);
+            if (_message_queue.size()) {
+                message = std::move(_message_queue.front());
+                _message_queue.pop_front();
+            }
+            std::swap(hold, _hold);
+        }
+
+        if (message) {
+            message();
+            if (task_done(p)) { return; }
+        }
+
+        send_value(p->_process.yield());
+
+        if (task_done(p)) { return; }
+
+        task_chain(p);
+    }
+
+    template <typename P>
+    void task_chain(const P& p) {
+        default_scheduler()([_p = make_weak_ptr(p)]{
+            // check for cancelation
+            auto p = _p.lock();
+            if (!p) return;
+            p->task_body(p);
+        });
+    }
+
+    template <typename P>
+    void task_continue(const P& p) {
+        std::unique_lock<std::mutex> lock(_message_mutex);
+        // STOP HERE
+        _ready;
+    }
+
+    template <typename P, typename... Args>
+    void set_value(const P& p, Args&&... args) {
+        bool ready = false;
+        {
+            std::unique_lock<std::mutex> lock(_message_mutex);
+            _message_queue.emplace_back([=]{ p->_process.await(args...); });
+            swap(ready, _ready);
+            _hold = true; // TODO (sparent) : adjustable on queue size. Currently 1.
+        }
+        if (!ready) return;
+        task_chain(p);
+    }
+
+    template <typename U>
+    void send_value(U&& x) {
+        map_t map;
+        {
+            std::unique_lock<std::mutex> lock(_map_mutex);
+            swap(map, _map);
+        }
+        for (const auto& e : map) {
+            default_scheduler()([=]{ e(x); });
+        }
+
+        // REVISIT (sparent): throw on insert below is problematic.
+        {
+            std::unique_lock<std::mutex> lock(_map_mutex);
+            if (_map.empty()) swap(map, _map);
+            else _map.insert(end(_map),
+                    make_move_iterator(begin(map)), make_move_iterator(end(map)));
+        }
+    }
+};
+
+/**************************************************************************************************/
+
+template <>
+struct shared_channel_base<void> : std::enable_shared_from_this<shared_channel_base<void>> {
+    bool                                   _ready{ true };
+    std::deque<std::function<void()>>      _message_queue;
+    std::mutex                             _message_mutex;
+
+    // REVISIT - not used...
+    virtual ~shared_channel_base() { }
+    virtual void task_continue() = 0;
+
+    template <typename P>
+    bool task_done(const P& p) {
+        if (!p->_process.done()) return false;
+
+        bool ready;
+        {
+        std::unique_lock<std::mutex> lock(_message_mutex);
+        ready = _message_queue.empty();
+        _ready = ready;
+        }
+        if (ready) return true;
+        task_chain(p);
+        return true;
+    }
+
+    template <typename P>
+    void task_body(const P& p) {
+        // interuptable - check for message at each step
+        std::function<void()> message;
+        {
+            std::unique_lock<std::mutex> lock(_message_mutex);
+            if (_message_queue.size()) {
+                message = std::move(_message_queue.front());
+                _message_queue.pop_front();
+            }
+        }
+
+        if (message) {
+            message();
+            if (task_done(p)) { return; }
+        }
+
+        p->_process.yield();
+
+        if (task_done(p)) { return; }
+
+        task_chain(p);
+    }
+
+    template <typename P>
+    void task_chain(const P& p) {
+        default_scheduler()([_p = make_weak_ptr(p)]{
+            // check for cancelation
+            auto p = _p.lock();
+            if (!p) return;
+            p->task_body(p);
+        });
+    }
+
+    template <typename P, typename... Args>
+    void set_value(const P& p, Args&&... args) {
+        bool ready = false;
+        {
+            std::unique_lock<std::mutex> lock(_message_mutex);
+            _message_queue.emplace_back([=]{ p->_process.await(args...); });
+            swap(ready, _ready);
+        }
+        if (!ready) return;
+        task_chain(p);
+    }
+};
+
+/**************************************************************************************************/
+
+template <typename Sig>
+struct shared_channel : shared_channel_base<result_of_t_<Sig>> {
+
+    template <typename T> struct any_process;
+    template <typename R, typename... Args>
+    struct any_process<R (Args...)> {
+        struct concept {
+            virtual ~concept() { }
+            virtual std::unique_ptr<concept> copy() const = 0;
+            virtual void await(Args... args) = 0;
+            virtual R yield() = 0;
+            virtual bool done() = 0;
+
+        };
+
+        template <typename U>
+        struct model : concept {
+            U _process;
+            model(U x) : _process(std::move(x)) { }
+            std::unique_ptr<concept> copy() const { return std::make_unique<model>(_process); }
+            void await(Args... args) { _process.await(args...); }
+            R yield() { return _process.yield(); }
+            bool done() { return _process.done(); }
+        };
+
+        std::unique_ptr<concept> _p;
+
+        template <typename U>
+        any_process(U&& x) : _p(std::make_unique<model<U>>(std::forward<U>(x))) { }
+        any_process(const any_process& x) : _p(x._p->copy()) { }
+        any_process(any_process&&) noexcept = default;
+        any_process& operator=(const any_process& x) {
+            auto tmp = x; *this = std::move(tmp); return *this;
+        }
+        any_process& operator=(any_process&&) noexcept = default;
+
+        template <typename... A>
+        void await(A&&... args) { _p->await(std::forward<A>(args)...); }
+        auto yield() { return _p->yield(); }
+        bool done() const { return _p->done(); }
+    };
+
+    using process_type = any_process<Sig>;
+    process_type _process;
+
+    template <typename F>
+    explicit shared_channel(F&& process) : _process(std::forward<F>(process)) { }
+
+    std::shared_ptr<shared_channel> shared_from_this() {
+        return std::static_pointer_cast<shared_channel>(this->shared_channel_base<result_of_t_<Sig>>::shared_from_this());
+    }
+
+    void task_continue() override {
+        this->task_continue(shared_from_this());
+    }
+
+    template <typename ...A>
+    void operator()(A&&... args) {
+        try {
+            this->set_value(shared_from_this(), std::forward<A>(args)...);
+        } catch(...) {
+            // TODO: handle exception pipe
+        }
+    }
+};
+
+} // namespace detail
+
+/**************************************************************************************************/
+
+template <typename T>
+class receiver {
+    using ptr_t = std::shared_ptr<detail::shared_channel_base<T>>;
+    ptr_t _p;
+
+    explicit receiver(ptr_t p) : _p(std::move(p)) { }
+
+    template <typename>
+    friend class channel;
+
+    template <typename>
+    friend struct detail::shared_channel_base;
+  public:
+
+    receiver() = default;
+    template <typename F>
+    auto map(F&& f) const { return _p->map(std::forward<F>(f)); }
+};
+
+template <typename T, typename F>
+auto operator|(const receiver<T>& x, F&& f) {
+    return x.map(std::forward<F>(f));
+}
+
+/**************************************************************************************************/
+
+template <typename F> struct function_process;
+
+template <typename R, typename... Args>
+struct function_process<R (Args...)> {
+    std::function<R (Args...)> _f;
+    std::function<R ()> _bound;
+    bool _done = false;
+
+    using signature_type = R(Args...);
+
+    template <typename F>
+    function_process(F&& f) : _f(std::forward<F>(f)) { }
+
+    template <typename... A>
+    void await(A&&... args) {
+        _bound = std::bind(std::move(_f), std::forward<A>(args)...);
+        _done = false;
+    }
+
+    R yield() { _done = true; return _bound(); }
+    bool done() const { return _done; }
+};
+
+/**************************************************************************************************/
+
+template <typename T>
+class channel {
+    using ptr_t = std::weak_ptr<detail::shared_channel<T (T)>>;
+
+    ptr_t _p;
+  public:
+    channel() = default;
+
+    channel(const channel&) = default;
+    channel(channel&&) noexcept = default;
+
+    channel& operator=(const channel& x) { auto tmp = x; *this = std::move(tmp); return *this; }
+    channel& operator=(channel&& x) noexcept = default;
+
+    ~channel() = default;
+
+    receiver<T> get_receiver() {
+        auto p = _p.lock();
+        if (!p) {
+            p = std::make_shared<detail::shared_channel<T(T)>>(function_process<T(T)>([](T x){ return x; }));
+            _p = p;
+        }
+        return receiver<T>(p);
+    }
+
+    template <typename... A>
+    void operator()(A&&... args) const {
+        auto p = _p.lock();
+        if (p) (*p)(std::forward<A>(args)...);
+    }
+};
+
+template <typename T, typename F>
+auto operator|(channel<T>& x, F&& f) {
+    return x.get_receiver().map(std::forward<F>(f));
+}
+
+/**************************************************************************************************/
+
+} // namespace stlab
+
+/**************************************************************************************************/
+
+#endif
+
+#if 0
+
+/**************************************************************************************************/
+/**************************************************************************************************/
+/**************************************************************************************************/
+
+#include <stlab/channel.hpp>
+
+#include <iostream>
+#include <string>
+
+using namespace std;
+using namespace stlab;
+
+struct iota {
+	int _count;
+	int _n;
+	process_state _state = process_state::await;
+
+    using signature = int(int);
+
+	void await(int n) {
+		_count = 0;
+		_n = n;
+		if (_count != _n) _state = process_state::yield;
+	}
+
+	int yield() {
+		int result = _count;
+		++_count;
+		_state = (_count != _n) ? process_state::yield : process_state::await;
+        return result;
+	}
+
+    void close() { }
+
+	process_state state() const { return _state; }
+};
+
+struct word {
+    string _word;
+    process_state _state = process_state::await;
+
+    using signature = string(char);
+
+    void await(char x) {
+        if (x == ' ' || x == '\0') _state = process_state::yield;
+        else _word += x;
+    }
+
+    string yield() {
+        _state = process_state::await;
+        string result;
+        swap(_word, result);
+        return result;
+    }
+
+    void close() {
+        if (!_word.empty()) _state = process_state::yield;
+    }
+
+    process_state state() const { return _state; }
+};
+
+struct line {
+    const size_t length = 30;
+    string _line;
+    string _result;
+    process_state _state = process_state::await;
+
+    using signature = string(string);
+
+    void await(string x) {
+        if ((length - _line.size() < x.size()) || x.size() == 0) {
+            _result = move(_line);
+            _line = move(x);
+            _state = process_state::yield;
+        } else _line += x;
+    }
+
+    string yield() {
+        _state = process_state::await;
+        return move(_result);
+    }
+
+    void close() {
+        if (!_line.empty()) {
+            _result = move(_line);
+            _state = process_state::yield;
+        }
+    }
+
+    process_state state() const { return _state; }
+};
+
+class empty { };
+
+int main() {
+    channel<char> sender;
+
+    auto receiver = sender | word() | line() | function_process<empty(string)>([](auto x){
+        cout << x << endl; return empty();
+    });
+
+    for (char e : "This is a very very very long, as in supper long string, that needs to be formatted.") {
+        sender(e);
+    }
+    sender.close();
+    
+    sleep(1000);
+}
+
+#endif
+
+#if 0
+
+class empty { };
+
+int main() {
+
+    channel<int> sender;
+
+#if 0
+    auto receiver = sender | function_process<empty(int)>([](auto x){
+        cout << x << endl; return empty();
+    });
+#endif
+
+#if 1
+    auto receiver = sender | iota() | function_process<empty(int)>([](auto x){
+        cout << x << endl; return empty();
+    });
+#endif
+
+#if 0
+    auto receiver = sender.get_receiver();
+
+    auto r0 = receiver.map(count_to_10_process());
+
+    auto r = r0.map(function_process<void_(int)>([](auto x){
+        cout << x << endl; return void_();
+    }));
+#endif
+
+    sender(5);
+    sender(42);
+    
+    sleep(100);
+
+    cout << "done" << endl;
+
+
+#if 0
+    process p;
+    stlab::future<int> start = make_ready_future(3);
+    stlab::future<void_> serialize = make_ready_future(void_());
+    join(p, serialize, start, [](int x){ cout << x << endl; });
+#endif
+
+#if 0
+    {
+
+    stlab::future<int> f1;
+    stlab::future<void_> f2 = make_ready_future(void_());
+
+    int f = 0;
+    int l = 10;
+
+    recursive(f, l, f1, f2);
+
+    sleep(100);
+
+    }
+#endif
+}
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+#include <stlab/future.hpp>
+
+#include <boost/optional.hpp>
+
+using namespace stlab;
+using namespace std;
+using namespace boost;
+
+struct sender {
+    int _x = 0;
+
+    auto yield() {
+        if (_x == 10) return optional<int>();
+        return optional<int>(_x++);
+    }
+};
+
+struct receiver {
+    void await(int x) {
+        cout << x << endl;
+    }
+};
+
+template <typename S, typename R>
+auto async_coroutines(S s, R r) {
+    return async(default_scheduler(), [=]() mutable { return s.yield(); }).then([=](auto e) mutable {
+        if (!e) return;
+        r.await(e.get());
+        return async_coroutines(s, r);
+    });
+}
+
+#if 0
+stlab::future<optional<int>> recurse(coroutine cr) {
+    return async(default_scheduler(), [=]() mutable { return cr.await(); }).then(
+            [=](auto x) -> stlab::future<optional<int>> mutable {
+                if (!x) return x;
+                cout << x << endl;
+                return recurse(cr);
+            });
+}
+#endif
+
+int main() {
+    int     _shared = 0;
+    mutex   _mutex;
+    bool    _sent = false;
+    bool    _done = false;
+    condition_variable _ready;
+
+    auto f = async(default_scheduler(), [&]{
+        int x = 0;
+        while (x != 10) {
+            {
+            unique_lock<mutex> lock(_mutex);
+            while (_sent) _ready.wait(lock);
+            _shared = x;
+            _sent = true;
+            }
+            _ready.notify_one();
+            ++x;
+        }
+        {
+        unique_lock<mutex> lock(_mutex);
+        while (_sent) _ready.wait(lock);
+        _done = true;
+        _sent = true;
+        }
+        _ready.notify_one();
+    });
+
+    while (true) {
+        int _out = 0;
+        {
+        unique_lock<mutex> lock(_mutex);
+        while (!_sent && !_done) _ready.wait(lock);
+        if (_done) break; // => done
+        _out = _shared;
+        _sent = false;
+        }
+        _ready.notify_one();
+        cout << _shared << endl;
+    }
+
+    sender cr;
+    receiver r;
+    for (auto e = cr.yield(); e; e = cr.yield()) {
+        r.await(e.get());
+    }
+
+    {
+        auto f = async_coroutines(sender(), receiver());
+        while (!f.get_try());
+    }
+
+    while (!f.get_try());
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <set>
+#include <bitset>
+#include <string>
+
+using namespace std;
+
+int toggle_a(int x) {
+    if (x & 0b10) x^= 0b0001110;
+    else x^= 0b1010010;
+    return x;
+}
+
+int toggle_b(int x) {
+    if (x & 0b01) x^= 0b0110101;
+    else x^= 0b0000101;
+    return x;
+}
+
+bool try_value(int value, set<int>& tried, int indent) {
+    if (tried.count(value)) {
+        cout << string(indent, ' ') << "dup:" << bitset<7>(value) << endl;
+        return false;
+    }
+    cout << string(indent, ' ') << "try:" << bitset<7>(value) << endl;
+    tried.insert(value);
+    if ((value & 0b1111100) == 0b1111100) return true;
+
+    if (try_value(toggle_a(value), tried, indent + 1)) {
+        cout << bitset<7>(toggle_a(value)) << endl;
+        return true;
+    }
+    if (try_value(toggle_b(value), tried, indent + 1)) {
+        cout << bitset<7>(toggle_b(value)) << endl;
+        return true;
+    }
+    return false;
+}
+
+int main() {
+    set<int> tried;
+    int value = 0;
+    int indent = 0;
+    if (try_value(value, tried, indent + 1)) {
+        cout << bitset<7>(value) << endl;
+    } else {
+        cout << "no solution found" << endl;
+    }
+}
+
+
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+
+#define ADOBE_STD_SERIALIZATION
+
+#include <adobe/dictionary.hpp>
+#include <adobe/iomanip_pdf.hpp>
+#include <adobe/name.hpp>
+#include <adobe/array.hpp>
+
+using namespace adobe;
+using namespace adobe::literals;
+using namespace std;
+
+int main() {
+
+    dictionary_t d;
+    d["array"_name] = array_t({ "name"_name, false, empty_t() });
+    d["key"_name] = 42;
+    d["key2"_name] = "Hello World!";
+
+    cout << begin_pdf << d << end_pdf << endl;
+}
+
+#endif
+
+#if 0
+
+#include <algorithm>
+#include <random>
+#include <iostream>
+
+using namespace std;
+
+template <typename I, typename N>
+void sort_within_n(I f, I l, N n) {
+    while ((l - f) < (2 * n)) {
+        partial_sort(f, f + n, f + (2 * n));
+        f += n;
+    }
+    sort(f, l);
+}
+
+template <typename I, typename O>
+void for_each_pair(I f, I l, O o) {
+    while (f != l) {
+        auto n = f; ++n;
+        if (n == l) return;
+        o(*f, *n);
+        ++f; ++f;
+    }
+}
+
+template <typename I, typename N>
+void shuffle_within_n(I f, I l, N n) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    auto r = uniform_int_distribution<int>(0, 1);
+
+    while (n != 0) {
+        auto s = f + (n % 2);
+        for_each_pair(s, l, [&](auto& x, auto& y) {
+            if (r(gen)) swap(x, y);
+        });
+        --n;
+    }
+}
+
+
+
+int main() {
+    int a[100];
+    iota(begin(a), end(a), 0);
+    shuffle_within_n(begin(a), end(a), 50);
+
+    sort_within_n(begin(a), end(a), 50);
+
+    for (const auto& e : a) {
+        cout << e << endl;
+    }
+
+}
+
+#endif
+
+
+#if 0
+#include <utility>
+#include <algorithm>
+#include <random>
+#include <iostream>
+#include <chrono>
+#include <map>
+#include <unordered_map>
+#include <memory>
+
+
+using namespace std;
+using namespace std::chrono;
+
+
+
+template <typename I,
+          typename P>
+auto stable_partition_position(I f, I l, P p) -> I
+{
+    auto n = l - f;
+    if (n == 0) return f;
+    if (n == 1) return f + p(f);
+    
+    auto m = f + (n / 2);
+
+    return rotate(stable_partition_position(f, m, p),
+                  m,
+                  stable_partition_position(m, l, p));
+}
+
+int main() {
+
+int  a[] = { 1, 2, 3, 4, 5, 5, 4, 3, 2, 1 };
+bool b[] = { 0, 1, 0, 1, 0, 0, 1, 0, 1, 0 };
+
+auto p = stable_partition_position(begin(a), end(a), [&](auto i) {
+    return *(begin(b) + (i - begin(a))); });
+
+for (auto f = begin(a), l = p; f != l; ++f) cout << *f << " ";
+cout << "^ ";
+for (auto f = p, l = end(a); f != l; ++f) cout << *f << " ";
+cout << endl;
+
+}
+
+
+#endif
+
+
+#if 0
+#include <utility>
+#include <algorithm>
+#include <random>
+#include <iostream>
+#include <chrono>
+#include <map>
+#include <unordered_map>
+#include <memory>
+
+
+using namespace std;
+using namespace std::chrono;
+
+#if 1
+
+class UIElement { };
+
+class UIElementCollection {
+  public:
+    void Add(shared_ptr<UIElement>);
+};
+
+class Panel : public UIElement {
+  public:
+    shared_ptr<UIElementCollection> Children() const;
+};
+
+//...
+
+void f() {
+    shared_ptr<Panel> panel;
+    shared_ptr<UIElement> element;
+
+    panel->Children()->Add(element);
+    panel->Children()->Add(element);
+    panel->Children()->Add(panel);
+}
+
+
+
+#endif
+
+const size_t num = 32;
+pair<int, int> a[num];
+
+__attribute__ ((noinline)) int binary(int* f, int* l, int n) {
+    int* p = f;
+    int r;
+    for (; n != 0; --n) {
+        r = lower_bound(begin(a), end(a), *p,
+            [](auto x, auto y){ return x.first < y; })->second;
+        if (++p == l) p = f;
+    }
+    return r;
+}
+
+__attribute__ ((noinline)) int linear(int* f, int* l, int n) {
+    int* p = f;
+    int r;
+    for (; n != 0; --n) {
+        r = find_if(begin(a), end(a),
+            [&](auto x){ return x.first == *p; })->second;
+        if (++p == l) p = f;
+    }
+    return r;
+}
+
+map<int, int> m_;
+
+__attribute__ ((noinline)) int map_table(int* f, int* l, int n) {
+    int* p = f;
+    int r;
+    for (; n != 0; --n) {
+        r = m_.find(*p)->second;
+        if (++p == l) p = f;
+    }
+    return r;
+}
+
+unordered_map<int, int> u_;
+
+__attribute__ ((noinline)) int unordered_map_table(int* f, int* l, int n) {
+    int* p = f;
+    int r;
+    for (; n != 0; --n) {
+        r = u_.find(*p)->second;
+        if (++p == l) p = f;
+    }
+    return r;
+}
+
+int main() {
+
+    int n = 0;
+    int m = 10;
+    generate(begin(a), end(a), [&](){ return make_pair(n++, m++); });
+    int key[num];
+
+    iota(begin(key), end(key), 0);
+    shuffle(begin(key), end(key), default_random_engine{});
+
+    m_.insert(begin(a), end(a));
+    u_.insert(begin(a), end(a));
+    {
+    auto start = high_resolution_clock::now();
+
+    auto result = linear(begin(key), end(key), 100000);
+
+    cout << "linear result: " << result << " time: "
+        << duration_cast<microseconds>(high_resolution_clock::now()-start).count()
+        << endl;
+    }
+    {
+    auto start = high_resolution_clock::now();
+
+    auto result = map_table(begin(key), end(key), 100000);
+
+    cout << "map result: " << result << " time: "
+        << duration_cast<microseconds>(high_resolution_clock::now()-start).count()
+        << endl;
+    }
+    {
+    auto start = high_resolution_clock::now();
+
+    auto result = unordered_map_table(begin(key), end(key), 100000);
+
+    cout << "unordered map result: " << result << " time: "
+        << duration_cast<microseconds>(high_resolution_clock::now()-start).count()
+        << endl;
+    }
+
+    {
+    auto start = high_resolution_clock::now();
+
+    auto result = binary(begin(key), end(key), 100000);
+
+    cout << "binary result: " << result << " time: "
+        << duration_cast<microseconds>(high_resolution_clock::now()-start).count()
+        << endl;
+    }
+
+}
+
+#endif
+
+
+#if 0
+
+#include <adobe/forest.hpp>
+#include <iostream>
+#include <algorithm>
+#include <utility>
+#include <iterator>
+
+using namespace std;
+using namespace adobe;
+
+template <typename I> // I is a depth adaptor range iterator
+void output(I& f, I& l)
+{
+    while (f != l) {
+        for (auto i = f.depth(); i != 0; --i) cout << "\t";
+
+        if (f.edge() == forest_leading_edge) cout << "<" << *f << ">" << endl;
+        else cout << "</" << *f << ">" << endl;
+
+        ++f;
+    }
+}
+
+int main() {
+    forest<string> f;
+
+    f.insert(end(f), "A");
+    f.insert(end(f), "E");
+
+    auto a = trailing_of(begin(f));
+    f.insert(a, "B");
+    f.insert(a, "C");
+    f.insert(a, "D");
+
+    auto r = depth_range(f);
+    output(r.first, r.second);
+}
+
+
+#endif
+
+#if 0
+
+#include <algorithm>
+#include <utility>
+#include <cassert>
+#include <iostream>
+
+using namespace std;
+
+enum x { b, c, d };
+enum y { e = 10, f, g };
+
+y x_to_y(x x_) {
+    const pair<x, y> a[] = { { b, e }, { c, f }, { d, g } };
+    assert(is_sorted(begin(a), end(a),[](auto a, auto b){ return a.first < b.first; }));
+    auto p = lower_bound(begin(a), end(a), x_, [](auto a, auto b){ return a.first < b; });
+    assert(p != end(a));
+    return p->second;
+}
+
+int main() {
+    cout << x_to_y(c) << endl;
+}
+
+#endif
+
+
+#if 0
+
+#include <cstddef>
+#include <vector>
+#include <algorithm>
+#include <random>
+#include <iostream>
+#include <chrono>
+#include <map>
+
+using namespace std;
+using namespace std::chrono;
+
+#define TEST_MAP 1
+
+#if TEST_MAP
+template <typename C, typename T>
+__attribute__ ((noinline)) void insert(C& c, const T& a) {
+    c.insert(c.end(), begin(a), end(a));
+}
+
+template <typename C, typename T>
+__attribute__ ((noinline)) void extract(C& c, const T& a) {
+    c.insert(begin(a), end(a));
+}
+#endif
+
+template <typename I> // I models RandomAccessIterator
+void sort_subrange(I f, I l, I sf, I sl)
+{
+    if (sf == sl) return;
+    if (f != sf) {
+        nth_element(f, sf, l);
+        ++sf;
+    }
+    partial_sort(sf, sl, l);
+}
+
+template <typename T>
+__attribute__ ((noinline)) void sort(T& x) {
+    sort(begin(x), end(x));
+}
+
+template <typename T>
+__attribute__ ((noinline)) void partial(T& x) {
+    sort_subrange(begin(x), end(x), begin(x) + 5000, begin(x) + 5100);
+}
+
+int main() {
+    int x[]={ 4, 13, 12, 7, 9, 5, 15, 14, 2, 11, 6, 16, 10, 1, 8, 3 };
+
+    int *f = begin(x), *sf = f + 5, *sl = f + 9, *l = end(x);
+    int *nl = sl + 3;
+
+    sort_subrange(f, l, sf, sl);
+    partial_sort(sl, nl, l);
+
+    for (const auto& e : x) cout << e << "; ";
+
+#if 0
+    nth_element(begin(x), begin(x) + 5, end(x));
+    for (const auto& e : x) cout << e << "; ";
+    cout << endl;
+    partial_sort(begin(x) + 6, begin(x) + 9, end(x));
+    for (const auto& e : x) cout << e << "; ";
+    cout << endl;
+#endif
+
+
+    #if 0
+    sort_subrange(begin(x), end(x), begin(x) + 50, begin(x) + 60);
+    for (const auto& e : x) cout << e << endl;
+    #endif
+
+#if 0
+    {
+    auto start = chrono::high_resolution_clock::now();
+
+    partial(x);
+
+    cout << chrono::duration_cast<chrono::milliseconds>
+        (chrono::high_resolution_clock::now()-start).count() << endl;
+    }
+
+    shuffle(begin(x), end(x), default_random_engine{});
+
+    {
+    auto start = chrono::high_resolution_clock::now();
+
+    sort(x);
+
+    cout << chrono::duration_cast<chrono::milliseconds>
+        (chrono::high_resolution_clock::now()-start).count() << endl;
+    }
+#endif
+
+}
+
+
+#endif
+
+
+#if 0
+
+#include <cstddef>
+#include <iostream>
+#include <list>
+#include <forward_list>
+#include <vector>
+
+using namespace std;
+
+struct counter {
+    struct { size_t *_m, *_c, *_ma, *_ca; } _counts;
+
+    counter(size_t& m, size_t& c, size_t& ma, size_t& ca) :
+        _counts{&m, &c, &ma, &ca}
+    { }
+    counter(const counter& x) : _counts(x._counts) { ++(*_counts._c); }
+    counter(counter&& x) noexcept : _counts(x._counts) { ++(*_counts._m); }
+    counter& operator=(const counter& x) { _counts = x._counts; ++(*_counts._ca); return *this; }
+    counter& operator=(counter&& x) noexcept { _counts = x._counts; ++(*_counts._ma); return *this; }
+};
+
+template <typename T>
+void test(const char* name) {
+    size_t m{0}, c{0}, ma{0}, ca{0};
+    counter n(m, c, ma, ca);
+    T fl(100, n);
+    m = 0, c = 0, ma = 0, ca = 0;
+    rotate(begin(fl), next(begin(fl), 20), end(fl));
+    cout << name << "{ move:" << m << ", copy:" << c << ", move_assign:" << ma
+        << ", copy_assign:" << ca << " }" << endl;
+}
+
+int main() {
+    test<forward_list<counter>>("forward_list");
+    test<list<counter>>("list");
+    test<vector<counter>>("vector");
+};
+
+#endif
+
+
+#if 0
+
+#define NDEBUG
+
+#include <iostream>
+#include <cstdint>
+#include <cstring>
+#include <cassert>
+
+constexpr bool str_equal(const char* x, const char * y)
+{
+    while (*x) {
+        if (*x != *y) return false;
+        ++x; ++y;
+    }
+
+    return !*y;
+}
+
+constexpr std::int32_t operator""_typeid(const char* s, std::size_t n) noexcept {
+    if (str_equal(s, "Hello")) return 0;
+    if (str_equal(s, "World")) return 1;
+    throw 0;
+}
+
+int main()
+{
+    char a["Hello"_typeid];
+    char b["World"_typeid];
+    char c["Boogie"_typeid];
+
+    std::cout << sizeof(a) << std::endl;
+    std::cout << sizeof(b) << std::endl;
+    std::cout << sizeof(c) << std::endl;
+}
+
+#endif
+
+
+#if 0
+
+#include <type_traits>
+#include <iostream>
+
+using namespace std;
+
+constexpr bool BOOL_CONTROLLER = 1;
+
+template <typename T, bool B = BOOL_CONTROLLER>
+inline auto foo(T x) -> enable_if_t<B>
+{
+    cout << x << endl;
+}
+
+template <typename T, bool B = BOOL_CONTROLLER>
+inline auto foo(T x) -> enable_if_t<!B>
+{
+    // Not an error because bar(x) depends on type T
+    // but will not be instantiated.
+    // If you replace T with int, becomes an error.
+    bar(x); // function bar not defined
+};
+
+int main() {
+    foo(10);
+}
+
+#endif
+
+
+
+#if 0
+#include <stlab/future.hpp>
+#include <iostream>
+#include <dispatch/dispatch.h>
+#include <chrono>
+
+using namespace std;
+using namespace stlab;
+using namespace std::chrono;
+
+/**************************************************************************************************/
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+/**************************************************************************************************/
+
+#if 0
+auto schedule = [](auto f) // F is void() and movable
+{
+    using f_t = decltype(f);
+
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            new f_t(std::move(f)), [](void* f_) {
+                auto f = static_cast<f_t*>(f_);
+                (*f)();
+                delete f;
+            });
+};
+#else
+auto schedule = [](auto f) // F is void() and movable
+{
+    thread(move(f)).detach();
+};
+
+auto schedule_immediate = [](auto f)
+{
+    cout << "now!" << endl;
+    f();
+};
+#endif
+
+/**************************************************************************************************/
+namespace stlab {
+
+template <typename T>
+class promise {
+    stlab::packaged_task<T(T)> _f;
+  public:
+    template <typename S>
+    stlab::future<T> get_future(S&& s) {
+        stlab::future<T> result;
+        std::tie(_f, result) = package<T(T)>(std::move(s), [](T x){ return x; });
+        return result;
+    }
+
+    void set_value(T value) {
+        _f(std::move(value));
+    }
+};
+
+} // namespace stlab
+
+/**************************************************************************************************/
+
+int main() {
+{
+    stlab::promise<int> p;
+    auto f = p.get_future(schedule);
+    f.then([](int x){ cout << "promise fulfilled:" << x << endl; }).detach();
+    p.set_value(42);
+    std::this_thread::sleep_for(seconds(3));
+}
+
+    cout << "begin-test" << endl;
+    {
+    async(schedule, [](){ cout << "detached" << endl; }).detach();
+    std::this_thread::sleep_for(seconds(3));
+    }
+
+
+
+    auto p = async(schedule_immediate, [](){ cout << "async" << endl; return 42; });
+    auto p2 = p.then(schedule_immediate,[](auto x){
+        cout << "x = " << x << endl;
+    });
+    std::this_thread::sleep_for(seconds(3));
+
+    cout << "end-test" << endl;
+
+
+    {
+    #if 1
+        auto p = async(schedule, []()->unique_ptr<int> { return make_unique<int>(42); });
+        std::this_thread::sleep_for(seconds(1));
+        auto x = std::move(p.get_try().get());
+        cout << *x << endl;
+    #endif
+    }
+
+    {
+    auto p = async(schedule, []{ cout << "1" << endl; }).then([]{ cout << "2" << endl; });
+
+    if (p.get_try()) { cout << "got it" << endl; }
+    else { cout << "not yet" << endl; }
+
+    std::this_thread::sleep_for(seconds(1));
+
+    if (p.get_try()) { cout << "got it" << endl; }
+    else { cout << "not yet" << endl; }
+    }
+    {
+    auto p = async(schedule, []{ return annotate(); }).then([](auto x) -> annotate { return move(x); });
+
+    std::this_thread::sleep_for(seconds(3));
+
+    auto a = std::move(std::move(p).get_try().get());
+    }
+    std::this_thread::sleep_for(seconds(1));
+    {
+    cout << "-----" << endl;
+    auto x = async(schedule, []{ return 10; });
+    auto y = async(schedule, []{ return 5; });
+    auto r = when_all(schedule, [](auto x, auto y){ return x + y; }, x, y);
+    std::this_thread::sleep_for(seconds(1));
+    cout << r.get_try().get() << endl;
+    }
+}
+
+/**************************************************************************************************/
+/**************************************************************************************************/
+
+
+
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+
+#include <vector>
+#include <thread>
+#include <functional>
+#include <iostream>
+
+using namespace std;
+
+template <typename>
+struct result_of_;
+
+template <typename R, typename... Args>
+struct result_of_<R(Args...)> { using type = R; };
+
+template <typename F>
+using result_of_t_ = typename result_of_<F>::type;
+
+using lock_t = unique_lock<mutex>;
+
+/**************************************************************************************************/
+
+template <typename S, typename R>
+struct shared_base {
+    vector<R> _r; // optional
+    mutex _mutex;
+    vector<function<void()>> _then;
+    S _s;
+
+    explicit shared_base(S s) : _s(move(s)) { }
+    
+    virtual ~shared_base() { }
+    
+    void set(R&& r) {
+        vector<function<void()>> then;
+        {
+            lock_t lock{_mutex};
+            _r.push_back(move(r));
+            swap(_then, then);
+        }
+        for (const auto& f : then) _s(move(f));
+    }
+    
+    template <typename F>
+    void then(F&& f) {
+        bool resolved{false};
+        {
+            lock_t lock{_mutex};
+            if (_r.empty()) _then.push_back(forward<F>(f));
+            else resolved = true;
+        }
+        if (resolved) _s(move(f));
+    }
+};
+
+template <typename> struct shared; // not defined
+
+template <typename S, typename R, typename... Args>
+struct shared<R(Args...)> : shared_base<S, R> {
+    function<R(Args...)> _f;
+    
+    template<typename F>
+    shared(F&& f) : _f(forward<F>(f)) { }
+    
+    template <typename... A>
+    void operator()(A&&... args) {
+        this->set(_f(forward<A>(args)...));
+        _f = nullptr;
+    }
+};
+
+template <typename> class packaged_task; //not defined
+template <typename> class future;
+
+template <typename S, typename F>
+auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>>;
+
+template <typename R>
+class future {
+    shared_ptr<shared_base<R>> _p;
+    
+    template <typename S, typename F>
+    friend auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>>;
+    
+    explicit future(shared_ptr<shared_base<R>> p) : _p(move(p)) { }
+ public:
+    future() = default;
+    
+    template <typename F>
+    auto then(F&& f) {
+        auto pack = package<result_of_t<F(R)>()>([p = _p, f = forward<F>(f)](){
+            return f(p->_r.back());
+        });
+        _p->then(move(pack.first));
+        return pack.second;
+    }
+    
+    const R& get() const { return _p->get(); }
+};
+
+template<typename R, typename ...Args >
+class packaged_task<R (Args...)> {
+    weak_ptr<shared<R(Args...)>> _p;
+    
+    template <typename S, typename F>
+    friend auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>>;
+    
+    explicit packaged_task(weak_ptr<shared<R(Args...)>> p) : _p(move(p)) { }
+    
+ public:
+    packaged_task() = default;
+    
+    template <typename... A>
+    void operator()(A&&... args) const {
+        auto p = _p.lock();
+        if (p) (*p)(forward<A>(args)...);
+    }
+};
+
+template <typename S, typename F>
+auto package(F&& f) -> pair<packaged_task<S>, future<result_of_t_<S>>> {
+    auto p = make_shared<shared<S>>(forward<F>(f));
+    return make_pair(packaged_task<S>(p), future<result_of_t_<S>>(p));
+}
+
+template <typename F, typename ...Args>
+auto async(F&& f, Args&&... args)
+{
+    using result_type = result_of_t<F (Args...)>;
+    using packaged_type = packaged_task<result_type()>;
+    
+    auto pack = package<result_type()>(bind(forward<F>(f), forward<Args>(args)...));
+
+#if 0
+    _system.async_(move(get<0>(pack)));
+#else
+    thread(move(get<0>(pack))).detach(); // Replace with task queue
+#endif
+    return get<1>(pack);
+}
+
+int main() {
+    future<int> x = async([]{ return 100; });
+    
+    future<int> y = x.then([](const int& x){ return int(x * 2); });
+    future<int> z = x.then([](const int& x){ return int(x / 15); });
+                                                            
+    cout << y.get() << endl;
+    cout << z.get() << endl;
+}
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+
+//#include <future>
+
+#include <boost/thread/future.hpp>
+
+using namespace std;
+using namespace boost;
+
+
+
+int main() {
+
+    
+    promise<int> x;
+    {
+        auto y = x.get_future().map([](auto x) { });
+    }
+
+
+
+
+#if 0
+    auto z = when_all(x, y).then([](auto _x, auto _y){
+        cout << _x + _y << endl;
+    });
+#endif
+
+
+#if 0
+    future<csbl::tuple<future<int>, future<int>>> w = when_all(std::move(x), std::move(y));
+
+    future<void> z = w.then([](auto result) {
+        auto tup = result.get();
+        cout << get<0>(tup).get() + get<1>(tup).get() << endl;
+    });
+    z.wait();
+#endif
+
+}
+
+
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+
+#define BOOST_THREAD_PROVIDES_EXECUTORS 1
+
+#include <iostream>
+#include <boost/thread/future.hpp>
+#include <boost/thread.hpp>
+#include <thread>
+#include <chrono>
+#include <array>
+
+#include <boost/thread/executors/basic_thread_pool.hpp>
+
+#include <boost/multiprecision/cpp_int.hpp>
+
+#include <dispatch/dispatch.h>
+
+using namespace std;
+using namespace boost;
+using namespace std::chrono;
+using namespace boost::multiprecision;
+
+namespace adobe {
+
+template <typename F, typename ...Args>
+auto async_main(F&& f, Args&&... args)
+        -> boost::future<typename std::result_of<F (Args...)>::type>
+{
+    using result_type = typename std::result_of<F (Args...)>::type;
+    using packaged_type = boost::packaged_task<result_type ()>;
+
+    auto p = new packaged_type(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
+    auto result = p->get_future();
+    dispatch_async_f(dispatch_get_main_queue(),
+            p, [](void* f_) {
+                auto f = static_cast<packaged_type*>(f_);
+                (*f)();
+                delete f;
+            });
+    
+    return result;
+}
+
+template <typename T>
+class detached_future {
+    struct shared {
+        boost::future<T> _future;
+        ~shared() {
+            if (_future.valid()) async_main([_f = std::move(_future)]{});
+        }
+    };
+
+    std::shared_ptr<shared> _shared;
+  public:
+    detached_future() : _shared(std::make_shared<shared>()) { }
+    detached_future& operator=(boost::future<T>&& x) { _shared->_future = std::move(x); return *this; }
+};
+
+class executor_main
+{
+  public:
+    executor_main(basic_thread_pool const&) = delete;
+    executor_main& operator=(executor_main const&) = delete;
+
+    constexpr executor_main() { }
+
+    void close() { }
+    bool closed() { return false; }
+
+    template <typename Closure>
+    void submit(Closure&& closure) const {
+        using closure_t = std::remove_reference_t<Closure>;
+        auto p = new closure_t(std::forward<Closure>(closure));
+        dispatch_async_f(dispatch_get_main_queue(),
+                p, [](void* f_) {
+                    auto f = static_cast<closure_t*>(f_);
+                    (*f)();
+                    delete f;
+                });
+    }
+
+    bool try_executing_one() { return false; }
+
+    template <typename Pred>
+    bool reschedule_until(Pred const& pred) { return false; }
+};
+
+constexpr executor_main execute_main;
+
+class executor_default
+{
+  public:
+    executor_default(basic_thread_pool const&) = delete;
+    executor_default& operator=(executor_default const&) = delete;
+
+    constexpr executor_default() { }
+
+    void close() { }
+    bool closed() { return false; }
+
+    template <typename Closure>
+    void submit(Closure&& closure) const {
+        using closure_t = std::remove_reference_t<Closure>;
+        auto p = new closure_t(std::forward<Closure>(closure));
+        dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+                p, [](void* f_) {
+                    auto f = static_cast<closure_t*>(f_);
+                    (*f)();
+                    delete f;
+                });
+    }
+
+    bool try_executing_one() { return false; }
+
+    template <typename Pred>
+    bool reschedule_until(Pred const& pred) { return false; }
+};
+
+constexpr executor_default execute_default;
+
+} // namespace adobe
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+int main() {
+    promise<int> x;
+    {
+        auto y = x.get_future().then(launch::deferred, [](auto x){});
+    }
+    x.set_value(10);
+
+
+#if 0
+
+    auto x = boost::async(adobe::execute_default, [](){ return 0; });
+
+        auto y = x.then(adobe::execute_default, [](auto f){
+            cout << "begin" << endl;
+            f.get(); // deadlock here
+            cout << "end" << endl;
+        });
+    cout << "done" << endl;
+#endif
+}
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+#include <boost/thread/future.hpp>
+#include <thread>
+#include <chrono>
+#include <array>
+
+#include <boost/multiprecision/cpp_int.hpp>
+
+using namespace std;
+using namespace boost;
+using namespace std::chrono;
+using namespace boost::multiprecision;
+
+/**************************************************************************************************/
+
+template <typename T>
+auto split(future<T>& x) {
+    auto tmp = std::move(x);
+    promise<T> p;
+    x = p.get_future(); // replace x with new future
+    return tmp.then([_p = std::move(p)](auto _tmp) mutable {
+        if (_tmp.has_exception()) {
+            auto error = _tmp.get_exception_ptr();
+            _p.set_exception(error);
+            rethrow_exception(error);
+        }
+
+        auto value = _tmp.get();
+        _p.set_value(value); // assign to new "x" future
+        return value; // return value through future result
+    });
+}
+
+/**************************************************************************************************/
+
+template <typename T, typename N, typename O>
+T power(T x, N n, O op)
+{
+    if (n == 0) return identity_element(op);
+    
+    while ((n & 1) == 0) {
+        n >>= 1;
+        x = op(x, x);
+    }
+    
+    T result = x;
+    n >>= 1;
+    while (n != 0) {
+        x = op(x, x);
+        if ((n & 1) != 0) result = op(result, x);
+        n >>= 1;
+    }
+    return result;
+}
+
+/**************************************************************************************************/
+
+template <typename N>
+struct multiply_2x2 {
+    std::array<N, 4> operator()(const std::array<N, 4>& x, const std::array<N, 4>& y)
+    {
+        return { x[0] * y[0] + x[1] * y[2], x[0] * y[1] + x[1] * y[3],
+            x[2] * y[0] + x[3] * y[2], x[2] * y[1] + x[3] * y[3] };
+    }
+};
+
+template <typename N>
+std::array<N, 4> identity_element(const multiply_2x2<N>&) { return { N(1), N(0), N(0), N(1) }; }
+
+template <typename R, typename N>
+R fibonacci(N n) {
+    if (n == 0) return R(0);
+    return power(std::array<R, 4>{ 1, 1, 1, 0 }, N(n - 1), multiply_2x2<R>())[0];
+}
+
+/**************************************************************************************************/
+
+
+
+
+int main() {
+    promise<int> x;
+    future<int> y = x.get_future();
+
+    x.set_value(42);
+    cout << y.get() << endl;
+
+    
+    future<cpp_int> z = async([]{ return fibonacci<cpp_int>(1'000); });
+    cout << z.get() << endl;
+
+
+
+#if 0
+    future<cpp_int> x = async([]{
+        throw runtime_error("failure");
+        return fibonacci<cpp_int>(1'000'000);
+    });
+        
+    // Do Something
+
+    try {
+        cout << x.get() << endl;
+    } catch (const runtime_error& error) {
+        cout << error.what() << endl;
+    }
+#endif
+
+
+#if 0
+    future<cpp_int> x = async([]{ return fibonacci<cpp_int>(100); });
+    
+    future<cpp_int> y = split(x).then([](future<cpp_int> x){ return cpp_int(x.get() * 2); });
+    future<cpp_int> z = x.then([](future<cpp_int> x){ return cpp_int(x.get() / 15); });
+
+    future<void> done = when_all(std::move(y), std::move(z)).then([](auto f){
+        auto t = f.get();
+        cout << get<0>(t).get() << endl;
+        cout << get<1>(t).get() << endl;
+    });
+
+    done.wait();
+
+#endif
+}
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+
+#include <memory>
+#include <iostream>
+
+using namespace std;
+
+struct cancel_base_ {
+    virtual ~cancel_base_() {}
+};
+
+template <typename F>
+struct cancel_model_ : cancel_base_ {
+    cancel_model_(F f) : _f(move(_f)) { }
+    F _f;
+};
+
+
+template <typename F>
+class cancelable_task {
+    weak_ptr<cancel_model_<F>> _shared;
+public:
+    cancelable_task(weak_ptr<cancel_model_<F>> x) : _shared(move(x)) { }
+
+    void operator()() const {
+        auto shared = _shared.lock();
+        if (shared) shared->_f();
+    }
+};
+
+class cancelation_token {
+    template <typename F> friend auto make_cancelable(F f);
+
+    cancelation_token(shared_ptr<cancel_base_> x) : _shared(move(x)) { }
+    shared_ptr<cancel_base_> _shared;
+};
+
+template <typename F>
+auto make_cancelable(F f) {
+    auto x = make_shared<cancel_model_<F>>(move(f));
+    return make_pair(cancelation_token(x), cancelable_task<F>(x));
+}
+
+int main() {
+    auto p = make_cancelable([](){ cout << "called" << endl; });
+    auto f = move(p.second);
+    {
+        auto x = move(move(p.first));
+        f();
+    }
+    f();
+
+
+}
+
+#endif
+
+
+#if 0
+#define BOOST_THREAD_PROVIDES_EXECUTORS 1
+
+#include <boost/thread/future.hpp>
+#include <boost/thread/executors/basic_thread_pool.hpp>
+
+
+#include <iostream>
+#include <chrono>
+#include <thread>
+
+#include <utility>
+
+using namespace boost;
+using namespace std;
+using namespace std::chrono;
+
+template <typename T>
+auto split(future<T>& x) {
+    auto tmp = std::move(x);
+    promise<T> p;
+    x = p.get_future();
+    return tmp.then([_p = std::move(p)](auto x) mutable {
+        if (x.has_exception()) {
+            auto error = x.get_exception_ptr();
+            _p.set_exception(error);
+            rethrow_exception(error);
+        }
+
+        auto value = x.get();
+        _p.set_value(value);
+        return value;
+    });
+}
+
+
+int main() {
+
+    promise<int> x;
+    auto a = x.get_future().share();
+
+    auto f1 = a.then([](auto x){ cout << "then 1:" << x.get() << endl; });
+    auto f2 = a.then([](auto x){ cout << "then 2:" << x.get() << endl; });
+
+    x.set_value(42);
+
+    std::this_thread::sleep_for(seconds(10));
+
+#if 0
+    basic_thread_pool pool;
+
+    promise<int> x;
+    auto a = x.get_future();
+
+    auto f1 = split(a).then(pool, [](auto x){ cout << "then 1:" << x.get() << endl; });
+    auto f2 = split(a).then(pool, [](auto x){ cout << "then 2:" << x.get() << endl; });
+
+    x.set_value(42);
+
+    std::this_thread::sleep_for(seconds(10));
+#endif
+
+}
+
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+#include <future>
+
+using namespace std;
+
+int main() {
+    future<int> y;
+
+
+    {
+        promise<int> x;
+        y = x.get_future();
+        try {
+            throw 42;
+        } catch (...) {
+            x.set_exception(current_exception());
+        }
+    }
+    try {
+        cout << y.get() << endl;
+    } catch (const int& error) {
+        cout << error << endl;
+    }
+}
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+
+
+#include <cstddef>
+#include <functional>
+#include <tuple>
+
+/**************************************************************************************************/
+
+namespace stlab {
+namespace details {
+
+/**************************************************************************************************/
+
+template <typename F, typename T, typename Args, std::size_t... I>
+auto apply_1_(F&& f, T&& t, const Args& args, std::index_sequence<I...>) {
+    return f(std::forward<T>(t),
+        std::forward<typename std::tuple_element<I, Args>::type>(std::get<I>(args))...);
+}
+
+template <typename F, typename T, typename Args>
+auto apply_1(F&& f, T&& x, const Args& args) {
+    return apply_1_(std::forward<F>(f), std::forward<T>(x), args,
+        std::make_index_sequence<std::tuple_size<Args>::value>());
+}
+
+/**************************************************************************************************/
+
+template <typename F, typename T>
+struct pipeable {
+    F&& _f;
+    T _args;
+
+    template <typename U>
+    auto operator()(U&& x) { return apply_1(std::forward<F>(_f), std::forward<U>(x), _args); }
+};
+
+template <typename T, typename F, typename... Args>
+auto operator>>(T&& x, pipeable<F, Args...>&& op) { return op(std::forward<T>(x)); }
+
+/**************************************************************************************************/
+
+} // namespace details
+
+/**************************************************************************************************/
+
+template <typename F, typename... Args>
+auto make_pipeable(F&& f, Args&&... args) {
+    return details::pipeable<F, std::tuple<Args&&...>>{ std::forward<F>(f),
+        std::forward_as_tuple(std::forward<Args>(args)...) };
+}
+
+/**************************************************************************************************/
+
+} // namespace stlab
+
+#include <iostream>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+template <typename T>
+auto add(T&& x) {
+    return stlab::make_pipeable(
+        [](auto&&, T&& x){
+            return std::forward<T>(x);
+        }, std::forward<T>(x));
+}
+
+int main() {
+    auto x = annotate() >> add(annotate());
+    x >> add(annotate());
+    annotate() >> add(x);
+}
+
+#endif
+
+
+#if 0
+
+#include <functional>
+
+using namespace std;
+
+template <typename T>
+class future_ {
+    T _x;
+  public:
+    future_(T x) : _x(move(x)) { }
+    T&& get() { return move(_x); }
+};
+
+int main() {
+    // bind([](future_<int> x, auto f) { return f(x.get()); }, placeholders::_1, [](auto y){ return y + 10; })(future_<int>(42));
+
+    bind([](future_<int> x, auto f) { return f(x.get()); }, placeholders::_1, [](auto y){ return y.get(); })(future_<int>(42));
+}
+
+#endif
+
+#if 0
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <iostream>
+#include <chrono>
+#include <functional>
+#include <thread>
+#include <tuple>
+
+#include <boost/thread/future.hpp>
+
+using namespace std;
+using namespace boost;
+using namespace std::chrono;
+
+/**************************************************************************************************/
+
+template <typename F, typename T, typename Args, std::size_t... I>
+auto apply_1_(F f, T&& t, Args&& args, std::index_sequence<I...>) {
+    return f(std::forward<T>(t), std::get<I>(args)...);
+}
+
+template <typename F, typename T, typename Args>
+auto apply_1(F f, T&& x, Args&& args) {
+    return apply_1_(f, x, args,
+        std::make_index_sequence<std::tuple_size<std::remove_reference_t<Args>>::value>());
+}
+
+/**************************************************************************************************/
+
+template <typename F, typename... Args>
+struct pipeable {
+    F&& _f;
+    std::tuple<Args&&...> _args;
+
+    template <typename T>
+    auto operator()(T&& x) { return apply_1(std::forward<F>(_f), std::forward<T>(x), _args); }
+};
+
+template <typename F, typename... Args>
+auto make_pipeable(F&& f, Args&&... args) {
+    return pipeable<F, Args...>{ std::forward<F>(f),
+        std::forward_as_tuple(std::forward<Args>(args)...) };
+}
+
+template <typename T, typename F, typename... Args>
+auto operator|(T&& x, pipeable<F, Args...>&& op) { return op(std::forward<T>(x)); }
+
+/**************************************************************************************************/
+
+
+
+template <typename F, typename... T>
+auto apply(F f, future<std::tuple<future<T>...>>& x) {
+    return apply([_f = move(f)](auto&... x){ return _f(x.get()...); }, x.get());
+};
+
+template <typename F, typename T>
+auto apply(F f, future<T>& x) {
+    return f(x.get());
+}
+
+template <typename... T>
+auto unpack_future(future<std::tuple<future<T>...>>& x) {
+    return apply([](auto&... x){ return make_tuple(x.get()...); }, x.get());
+}
+
+template <typename T>
+auto unpack_future(future<T>& x) { return x.get(); }
+
+template <typename T, typename F>
+auto then(future<T>& x, F&& f) {
+    auto tmp = std::move(x);
+    promise<T> p;
+    x = p.get_future();
+    return tmp.then([_f = std::forward<F>(f), _p = std::move(p)](auto x) mutable {
+        auto value = [&](){
+            try {
+                return x.get();
+            } catch(...) {
+                _p.set_exception(boost::current_exception());
+                throw;
+            }
+        }();
+        _p.set_value(value);
+        return _f(std::move(value));
+    });
+}
+
+template <typename T, typename F>
+auto then(future<T>&& x, F&& f) {
+    return x.then([_f = std::forward<F>(f)](auto x) { return _f(x.get()); });
+}
+
+template <typename F>
+auto then(F&& f) {
+    return make_pipeable([](auto&& x, auto&& f) {
+        return then(std::forward<decltype(x)>(x), std::forward<decltype(f)>(f));
+    }, std::forward<F>(f));
+}
+
+#if 0
+template <typename T, typename F>
+void error(future<T>& x, F&& f) {
+    auto tmp = std::move(x);
+    promise<T> p;
+    x = p.get_future();
+    tmp.then(boost::launch::deferred, [_f = move(f), _p = std::move(p)](auto x) mutable {
+        auto value = [&](){
+            try {
+                return x.get();
+            } catch(...) {
+                auto error = boost::current_exception();
+                _p.set_exception(error);
+                _f(error);
+                throw;
+            }
+        }();
+        _p.set_value(value);
+    });
+}
+#endif
+
+int main() {
+    promise<int> a_;
+
+    auto x = a_.get_future() | then([](int y){ return y + 10; }) | then([](int x){ return x + 5; });
+    auto y = x | then([](int x){ return x == 57 ? "success" : "fail"; });
+    auto z = x | then([](int x){ return x / 3; });
+
+    a_.set_value(42);
+
+    cout << x.get() << " " << y.get() << " " << z.get() << endl;
+
+#if 0
+    future<int> a = a_.get_future();
+
+#if 0
+    error(a, [](auto x) {
+        cout << "error called" << endl;
+        try { rethrow_exception(x); }
+        catch (const std::exception& x) {
+            cout << "error: " << x.what() << endl;
+        }
+    });
+#endif
+
+    auto x = a_.get_future() | then([](auto x){ return x + 10; }) | then([](auto x){ return x + 5; });
+
+#if 0
+    auto x = then(a, [](auto x) {
+        if (x == 42) return "Hello";
+        return "fail";
+    });
+
+    auto y = then(a, [](auto x) {
+        if (x == 42) return " World!";
+        return "fail";
+    });
+#endif
+
+    a_.set_value(42);
+
+   // a_.set_exception(std::runtime_error("runtime_error"));
+
+    try {
+        cout << x.get();
+    } catch (const std::exception& e) {
+        cout << "catch 1: " << e.what() << endl;
+    }
+
+    try {
+        cout << y.get() << endl;
+    } catch (const std::exception& e) {
+        cout << "catch 2: " << e.what() << endl;
+    }
+
+    std::this_thread::sleep_for(seconds(3));
+
+#endif
+#if 0
+    promise<int> a_;
+    promise<double> b_;
+    future<int> a = a_.get_future();
+    future<double> b = b_.get_future();
+
+    //future<tuple<future<int>, future<int>>> x;
+    //auto y = unpack_future(x);
+    auto c = when_all(std::move(a), std::move(b));
+    auto d = c.then([](auto x){ return apply([](int x, double y){ return x + y; }, x); });
+   a_.set_value(42);
+   b_.set_value(68);
+
+   cout << d.get() << endl;
+#endif
+
+}
+
+#endif
+
+
+#if 0
+#include <iostream>
+
+using namespace std;
+
+int main() {
+    int x = 0;
+    const auto f = [&](){ return ++x; };
+    cout << f() << " " << f() << " " << f() << endl;
+
+    const auto f2 = [](){ return make_shared<int>(42); };
+    auto a = f2();
+    auto b = f2();
+}
+#endif
+
+#if 0
+
+#include <iostream>
+#include <typeinfo>
+#include <string>
+#include <memory>
+#include <vector>
+
+using namespace std;
+
+template <typename T>
+void draw(const T&);
+
+class any {
+    struct concept {
+        virtual ~concept() { }
+        virtual concept* copy() const = 0;
+        virtual const type_info& type() const = 0;
+        virtual bool equal(const concept& x) const = 0;
+        virtual void draw_() const = 0;
+    };
+
+    template <typename T>
+    struct model : concept {
+        model(T x) : _data(move(x)) { }
+        concept* copy() const { return new model(*this); }
+        const type_info& type() const { return typeid(_data); }
+        bool equal(const concept& x) const {
+            return _data == static_cast<const model&>(x)._data;
+        }
+        void draw_() const { draw(_data); }
+        T _data;
+    };
+
+    unique_ptr<concept> _model;
+  public:
+
+    template <typename T>
+    any(T x) : _model(new model<T>(move(x))) { }
+    any() = default;
+    any(const any& x) : _model(x._model->copy()) { }
+    any(any&&) noexcept = default;
+    any& operator=(const any& x) { any tmp(x); *this = move(tmp); return *this; }
+    any& operator=(any&&) noexcept = default;
+
+    const type_info& type() const { return _model->type(); }
+
+    template <typename T>
+    T& get() { return dynamic_cast<model<T>&>(*_model)._data; }
+
+    friend inline bool operator==(const any& x, const any& y) {
+        return (x.type() == y.type()) && (x._model->equal(*y._model));
+    }
+
+    void draw_() const { _model->draw_(); }
+};
+
+
+template <typename T>
+void draw(const T& x) { cout << x << endl; }
+
+template <>
+void draw<string>(const string& x) { cout << "string: " << x << endl; }
+
+int main() {
+    function<void()> f = []() { cout << "hello!" << endl; };
+    int a = 10;
+    any b = (ref(a));
+    b.get<reference_wrapper<int>>().get() = 22;
+    cout << a << endl;
+
+#if 0
+    any x(42.5);
+    any y(string("Hello World"));
+    // any z(vector<any>{ 27.3, string("nifty"), true});
+
+    cout << (x == x) << endl;
+
+    cout << x.get<double>() << endl;
+    cout << y.get<string>() << endl;
+
+    x.draw_();
+    y.draw_();
+#endif
+
+#if 0
+    cout << z.get<vector<any>>()[0].get<double>() << z.get<vector<any>>()[1].get<string>()
+        << z.get<vector<any>>()[2].get<bool>() << endl;
+#endif
+}
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <iostream>
+#include <chrono>
+#include <thread>
+
+#include <boost/thread/future.hpp>
+
+using std::decay_t;
+using std::get;
+using std::index_sequence;
+using std::make_index_sequence;
+using std::size_t;
+using std::tuple;
+using std::tuple_size;
+using std::move;
+using std::make_tuple;
+using std::cout;
+using std::endl;
+using std::result_of_t;
+using boost::future;
+using boost::promise;
+using boost::when_all;
+using boost::packaged_task;
+using boost::make_ready_future;
+
+using namespace std::chrono;
+
+
+
+template <typename F> // F models UnaryFunction
+struct pipeable {
+    F op_;
+
+    template <typename T>
+    auto operator()(T&& x) const { return op_(forward<T>(x)); }
+};
+
+template <typename F>
+auto make_pipeable(F x) { return pipeable<F>{ move(x) }; }
+
+template <typename F, typename... Args>
+auto make_pipeable(F x, Args&&... args) {
+    return make_pipeable(bind(move(x), placeholders::_1, forward<Args>(args)...));
+}
+
+template <typename F, typename T, size_t... I>
+auto apply_(F f, T&& t, index_sequence<I...>) {
+    return f(get<I>(t)...);
+}
+
+template <typename F, typename T>
+auto apply(F f, T&& t) {
+    return apply_(f, t, make_index_sequence<tuple_size<T>::value>());
+}
+
+template <typename F, typename... T>
+auto apply(F f, future<tuple<future<T>...>>& x) {
+    return apply([_f = move(f)](auto&... x){ return _f(x.get()...); }, x.get());
+};
+
+template <typename F, typename T>
+auto apply(F f, future<T>& x) {
+    return f(x.get());
+}
+
+template <typename... T>
+auto unpack_future(future<tuple<future<T>...>>& x) {
+    return apply([](auto&... x){ return make_tuple(x.get()...); }, x.get());
+}
+
+template <typename T>
+auto unpack_future(future<T>& x) { return x.get(); }
+
+template <typename T, typename F>
+auto operator|(T&& x, const pipeable<F>& op) { return op(forward<T>(x)); }
+
+template <typename T, typename F>
+auto then(future<T>& x, F&& f) {
+    auto tmp = std::move(x);
+    promise<T> p;
+    x = p.get_future();
+    return tmp.then([_f = move(f), _p = std::move(p)](auto x) mutable {
+        auto value = [&](){
+            try {
+                return x.get();
+            } catch(...) {
+                _p.set_exception(boost::current_exception());
+                throw;
+            }
+        }();
+        _p.set_value(value);
+        return _f(move(value));
+    });
+}
+
+#if 0
+template <typename T, typename F>
+void error(future<T>& x, F&& f) {
+    auto tmp = std::move(x);
+    promise<T> p;
+    x = p.get_future();
+    tmp.then(boost::launch::deferred, [_f = move(f), _p = std::move(p)](auto x) mutable {
+        auto value = [&](){
+            try {
+                return x.get();
+            } catch(...) {
+                auto error = boost::current_exception();
+                _p.set_exception(error);
+                _f(error);
+                throw;
+            }
+        }();
+        _p.set_value(value);
+    });
+}
+#endif
+
+int main() {
+    promise<int> a_;
+    future<int> a = a_.get_future();
+
+#if 0
+    error(a, [](auto x) {
+        cout << "error called" << endl;
+        try { rethrow_exception(x); }
+        catch (const std::exception& x) {
+            cout << "error: " << x.what() << endl;
+        }
+    });
+#endif
+
+    auto x = then(a, [](auto x) {
+        if (x == 42) return "Hello";
+        return "fail";
+    });
+
+    auto y = then(a, [](auto x) {
+        if (x == 42) return " World!";
+        return "fail";
+    });
+
+    a_.set_value(42);
+
+   // a_.set_exception(std::runtime_error("runtime_error"));
+
+    try {
+        cout << x.get();
+    } catch (const std::exception& e) {
+        cout << "catch 1: " << e.what() << endl;
+    }
+
+    try {
+        cout << y.get() << endl;
+    } catch (const std::exception& e) {
+        cout << "catch 2: " << e.what() << endl;
+    }
+
+    std::this_thread::sleep_for(seconds(3));
+
+
+#if 0
+    promise<int> a_;
+    promise<double> b_;
+    future<int> a = a_.get_future();
+    future<double> b = b_.get_future();
+
+    //future<tuple<future<int>, future<int>>> x;
+    //auto y = unpack_future(x);
+    auto c = when_all(std::move(a), std::move(b));
+    auto d = c.then([](auto x){ return apply([](int x, double y){ return x + y; }, x); });
+   a_.set_value(42);
+   b_.set_value(68);
+
+   cout << d.get() << endl;
+#endif
+
+}
+
+
+#endif
+
+
+#if 0
+
+//
+//  main.cpp
+//  Homework3
+//
+//  Created by Russell Williams on 3/12/15.
+//  Copyright (c) 2015 Russell Williams. All rights reserved.
+//
+
+#include <iostream>
+#include <string.h>
+
+// parse_exception captures the error message and current parse location
+
+class parse_exception : public std::runtime_error {
+public:
+	std::string _parse_position;
+
+	parse_exception (std::string msg, std::string parse_position) :
+		std::runtime_error (msg), _parse_position (parse_position) { }
+	};
+
+// parse a simplified version of json: no escapes in strings and numbers
+// are non-range-checked integers. White space can tokens otherwise not
+// separated. Input is a pointer to a null-terminated UTF-8 string which
+// must not be modified until the parse is complete. Errors cause a
+// parse_exception exception to be thrown.
+//
+// All recognized grammar elements are printed to cout when recognized,
+// but no other action is taken.
+//
+// It would be easy to modify this code to return lower level values back up
+// to the object and array routines for insertion in a dictionary.
+//
+// may throw parse_exception
+
+class json_parser {
+public:
+	// Construct a parser given a pointer to a null-terminated UTF-8 string
+
+	explicit json_parser (const char* p) : _p(p) { }
+
+	// parse the input
+
+	void parse_json() {
+		require (is_object (), "not object");
+		skip_space ();
+		require (!*_p, "extra characters after end of object");
+		}
+
+private:
+	const char* _p;	// Anything that advances p must check for end of string
+
+	// object = "{" {string : value {,string:value}} "}"
+	// Yes, I could have added an initializer list rule and had two simpler rules
+
+	bool is_object () {
+
+		if (!is_token ("{"))
+			return false;
+
+		// empty object
+		if (is_token ("}")) {
+			recognized ("object");
+			return true;
+			}
+
+		// first item in list
+		require (is_string ("member name"), "member name required after \"{\"");
+		require (is_token (":"), "\":\" required after member name");
+		require (is_value (), "value required for member");
+
+		while (is_token (",")) {
+			require (is_string ("member name"), "member name required after \",\"");
+			require (is_token (":"), "\":\" required after member name");
+			require (is_value (), "value required for member");
+			}
+
+		require (is_token ("}"), "expected \"}\" to close object");
+		recognized ("object");
+		return true;
+		}
+
+	// array = "[" {value {, value} } "]"
+
+	bool is_array () {
+		if (!is_token ("["))
+			return false;
+
+		if (is_token ("]")) {
+			recognized ("array");
+			return true;
+			}
+
+		if (!is_value ())
+			return false;
+
+		while (is_token (",")) {
+			require (is_value (), "expected value after \",\" in array");
+			}
+
+		require (is_token ("]"), "expected \"]\" to close array");
+		recognized ("array");
+		return true;
+		}
+
+	// string = """ { non-quote-character } """
+
+	bool is_string (const char* label) {
+		if (!is_token ("\""))
+			return false;
+
+		const char* start_compare = _p;
+		while (*_p && !is_token ("\""))
+			++_p;
+
+		require (*_p, "unterminated string");
+		recognized (label, start_compare, _p - start_compare-1);
+		return true;
+		}
+
+	// number = ["-" digit {digit}
+
+	bool is_number () {
+		skip_space ();
+
+		int  result = 0;
+		bool positive = true;
+
+		if (is_token ("-"))
+			positive = false;
+
+		bool found_digit = false;
+
+		while (*_p && std::isdigit (*_p)) {
+			found_digit = true;
+			result = result * 10 + (*_p++ - '0');
+			}
+
+		if (positive && !found_digit)
+			return false;
+
+		require (found_digit, "expected digit");
+
+		if (!positive)
+			result = -result;
+
+		recognized ("number", result);
+		return true;
+		}
+
+	// true = "true"
+
+	bool is_true () {
+		if (is_token ("true")) {
+			recognized ("true");
+			return true;
+			}
+		else
+			return false;
+		}
+
+	// false = "false"
+
+	bool is_false () {
+		if (is_token ("false")) {
+			recognized ("false");
+			return true;
+			}
+		else
+			return false;
+		}
+
+	// null = "null"
+
+	bool is_null () {
+		if (is_token ("null")) {
+			recognized ("null");
+			return true;
+			}
+		else
+			return false;
+		}
+
+	// value = string | number | object | array | true | false | null
+
+	bool is_value () {
+		return is_string ("string value") || is_number () || is_object () ||
+			   is_array () || is_true () || is_false () || is_null ();
+
+		}
+
+	// look for specified token, possibly preceded by whitespace
+	// advance _p only if it's found
+
+	bool is_token (const char* token) {
+		skip_space ();
+
+		size_t compare_length = 0;
+
+		const char* p_copy		=_p;
+		const char* token_copy	= token;
+
+		while (*p_copy && *token_copy && *p_copy == *token_copy)
+			++p_copy, ++compare_length, ++token_copy;
+
+		// See if we got to the end of the token
+
+		if (*token_copy)
+			return false;
+
+		_p += compare_length;
+
+		recognized ("token", token);
+		return true;
+		}
+
+	void skip_space () {
+		while (*_p && isspace (*_p))
+			++_p;
+		}
+
+	void require (bool condition, const char* errorMsg) {
+		if (!condition)
+			throw parse_exception (errorMsg, _p);
+		}
+
+	// The recognized methods just print a message describing what has
+	// been recognized; overloads print messages for different items
+
+	void recognized (const char* label) {
+		std::cout << "Recognized " << label << std::endl;
+		}
+
+	void recognized (const char* label, const char* value) {
+		std::cout << "Recognized " << label << " " << value << std::endl;
+		}
+
+	void recognized (const char* label, const char* value, size_t n) {
+		std::cout << "Recognized " << label << " ";
+		std::cout.write (value, n);
+		std::cout << std::endl;
+		}
+
+	void recognized (const char* label, int value) {
+		std::cout << "Recognized " << label << " " << value << std::endl;
+		}
+	};
+
+// Parse the specified string by constructing and then running a json_parser,
+// then print the parse error (if any). Other exceptions pass through
+
+void parse (const char* p) {
+	json_parser parser(p);
+	try {
+		parser.parse_json ();
+		}
+	catch (const parse_exception& err)
+		{
+		std::cout << "Parse error: " << err.what () << " at \'" <<
+			err._parse_position << "\'" << std::endl;
+		}
+	}
+
+// Read and parse input lines until an empty line is entered
+
+int main() {
+		parse (R"(
+            { "number" : 42, "array" : [ 42, "string", true] }
+        )");
+
+	}
+
+#endif
+
+#if 0
+#include <cctype>
+#include <algorithm>
+#include <stdexcept>
+#include <iostream>
+
+using namespace std;
+
+/*
+
+expression = add_term.
+add_term = mul_term { '+' mul_term }.
+mul_term = number { '*' number }.
+number = digit { digit }.
+
+*/
+
+int parse(const char*);
+
+class parser {
+
+    friend inline int parse(const char* p) {
+        parser tmp(p);
+        return tmp.expression();
+    }
+
+    const char* _p;
+
+    explicit parser(const char* p) : _p(p) { }
+
+    int expression() {
+        int result;
+        require(is_add_term(result), "add_term required");
+        skip_space();
+        if (*_p != '\0') throw runtime_error("not at eof");
+        return result;
+    }
+    bool is_add_term(int& x) {
+        int result;
+        if (!is_mul_term(result)) return false;
+        int arg;
+        while (is_token("+")) {
+            require(is_mul_term(arg), "mul_term required");
+            result += arg;
+        }
+        x = result;
+        return true;
+    }
+    bool is_mul_term(int& x) {
+        int result;
+        if (!is_number(result)) return false;
+        int arg;
+        while (is_token("*")) {
+            require(is_number(arg), "number required");
+            result *= arg;
+        }
+        x = result;
+        return true;
+    }
+
+    bool is_number(int& x) {
+       skip_space();
+       if (!isdigit(*_p)) return false;
+       int result = *_p - '0'; ++_p;
+       while (isdigit(*_p)) { result = result * 10 + (*_p - '0'); ++_p; }
+       x = result;
+       return true;
+    }
+
+    bool is_token(const char* x) {
+        skip_space();
+        if (!(*mismatch(x, x + strlen(x), _p).first == '\0')) return false;
+        _p += strlen(x);
+        return true;
+    }
+
+    void skip_space() {
+        while (isspace(*_p)) ++_p;
+    }
+
+    void require(bool x, const char* error) {
+        if (!x) throw runtime_error(error);
+    }
+
+};
+
+int main() {
+
+    cout << parse("  3 + 67 * 100   ") << endl;
+
+}
+
+#endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+
+#include <algorithm>
+#include <stdexcept>
+#include <cctype>
+#include <cstring>
+#include <iostream>
+
+using namespace std;
+
+int parse(const char* x);
+
+class parse_expression {
+    const char* _p;
+
+    explicit parse_expression(const char* p) : _p(p) { }
+    int evaluate() {
+        int r;
+        if (!is_add(r)) throw runtime_error("add required");
+        while (isspace(*_p)) ++_p;
+        if (*_p) throw runtime_error("end not reached");
+        return r;
+    }
+    bool is_add(int& x) {
+        int r;
+        if (!is_mul(r)) return false;
+        while (is_token("+")) {
+            int a;
+            if (!is_mul(a)) throw runtime_error("mul required");
+            r += a;
+        }
+        x = r;
+        return true;
+    }
+    bool is_mul(int& x) {
+        int r;
+        if (!is_number(r)) return false;
+        while (is_token("*")) {
+            int a;
+            if (!is_number(a)) throw runtime_error("number required");
+            r *= a;
+        }
+        x = r;
+        return true;
+    }
+    bool is_number(int& x) {
+        while (isspace(*_p)) ++_p;
+        if (!isdigit(*_p)) return false;
+        int result = *_p - '0'; ++_p;
+        while (isdigit(*_p)) { result = result * 10 + (*_p - '0'); ++_p; }
+        x = result;
+        return true;
+    }
+    bool is_token(const char* x) {
+        while (isspace(*_p)) ++_p;
+        if (*mismatch(x, x + strlen(x), _p).first == '\0') return false;
+        _p += strlen(x);
+        return true;
+    }
+
+    friend inline int parse(const char* x) {
+        parse_expression tmp(x);
+        return tmp.evaluate();
+    }
+};
+
+int main() {
+    cout << parse("  5 *   10 + 3*2   ") << endl;
+}
+
+#endif
+
+
+
+
+#if 0
 // GOOD for talk
 
 #include <deque>
@@ -292,10 +6357,16 @@ auto async(F&& f, Args&&... args)
     using packaged_type = packaged_task<result_type()>;
     
     auto pack = package<result_type()>(bind(forward<F>(f), forward<Args>(args)...));
-    
+
+#if 0
     _system.async_(move(get<0>(pack)));
+#else
+    thread(move(get<0>(pack))).detach(); // Replace with task queue
+#endif
     return get<1>(pack);
 }
+
+
 
 int main() {
     future<cpp_int> x = async([]{ return fibonacci<cpp_int>(100); });
@@ -1445,13 +7516,13 @@ void for_each_argument(F f, Args&&... args) {
 }
 
 template <typename F, typename T, size_t... I>
-void apply_(F f, T&& t, integer_sequence<size_t, I...>) {
+void apply_(F f, T&& t, index_sequence<size_t, I...>) {
     f(get<I>(t)...);
 }
 
 template <typename F, typename T>
 void apply(F f, T&& t) {
-    apply_(f, t, make_integer_sequence<size_t, tuple_size<T>::value>());
+    apply_(f, t, make_index_sequence<size_t, tuple_size<T>::value>());
 }
 /**************************************************************************************************/
 

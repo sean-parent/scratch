@@ -22,6 +22,8 @@
 		<string>https://github.com/stlab/double-conversion.git</string>
 		<key>A0F2B7F0D4854E0CD80891D6C04B171B4954D2AF</key>
 		<string>https://github.com/stlab/double-conversion.git</string>
+		<key>D16DA776B0E0F0A2C4BEF807DD901357B8E817C1</key>
+		<string>https://github.com/stlab/libraries.git</string>
 		<key>F002BD5A0FCAA52F5A9A336B4441AA6158FD59B1</key>
 		<string>https://github.com/sean-parent/scratch.git</string>
 		<key>F68CAB7CF070A331E355D5822E10233633A29D59</key>
@@ -43,6 +45,8 @@
 		<string>../../stlab/double-conversion</string>
 		<key>A0F2B7F0D4854E0CD80891D6C04B171B4954D2AF</key>
 		<string>../../stlab/double-conversion</string>
+		<key>D16DA776B0E0F0A2C4BEF807DD901357B8E817C1</key>
+		<string>../../stlab/libraries</string>
 		<key>F002BD5A0FCAA52F5A9A336B4441AA6158FD59B1</key>
 		<string>..</string>
 		<key>F68CAB7CF070A331E355D5822E10233633A29D59</key>
@@ -92,6 +96,14 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>01F9EDC5-2143-4177-8E3A-218D0C9810A6</string>
+			<key>IDESourceControlWCCName</key>
+			<string>ic_chrome</string>
+		</dict>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
 			<string>15995E0C9CDE61F407FB9EE700461F8501EE3237</string>
 			<key>IDESourceControlWCCName</key>
 			<string>ic_chrome</string>
@@ -100,9 +112,9 @@
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.git</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>01F9EDC5-2143-4177-8E3A-218D0C9810A6</string>
+			<string>D16DA776B0E0F0A2C4BEF807DD901357B8E817C1</string>
 			<key>IDESourceControlWCCName</key>
-			<string>ic_chrome</string>
+			<string>libraries</string>
 		</dict>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>

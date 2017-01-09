@@ -1,0 +1,79 @@
+{
+  "DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey" : "F002BD5A0FCAA52F5A9A336B4441AA6158FD59B1",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyRepositoryLocationsKey" : {
+
+  },
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
+    "F002BD5A0FCAA52F5A9A336B4441AA6158FD59B1" : 0,
+    "15995E0C9CDE61F407FB9EE700461F8501EE3237" : 0,
+    "A0F2B7F0D4854E0CD80891D6C04B171B4954D2AF" : 0,
+    "75EA7FDD-5620-4538-BA02-CA4CA5B0EDA1" : 0,
+    "01F9EDC5-2143-4177-8E3A-218D0C9810A6" : 0,
+    "5BB403B4B79982711C8700246A9885185365A360" : 0,
+    "D16DA776B0E0F0A2C4BEF807DD901357B8E817C1" : 0,
+    "F68CAB7CF070A331E355D5822E10233633A29D59" : 0,
+    "5DF239B4-6051-4D60-AAF1-95387278E147" : 0
+  },
+  "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "0881B3BA-7749-4519-ADC2-BC9CC65CB2FF",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
+    "F002BD5A0FCAA52F5A9A336B4441AA6158FD59B1" : "scratch\/",
+    "15995E0C9CDE61F407FB9EE700461F8501EE3237" : "..\/..\/git.corp.adobe.com\/sparent\/ic_chrome",
+    "A0F2B7F0D4854E0CD80891D6C04B171B4954D2AF" : "..\/stlab\/double-conversion",
+    "75EA7FDD-5620-4538-BA02-CA4CA5B0EDA1" : "stlab\/double-conversion",
+    "01F9EDC5-2143-4177-8E3A-218D0C9810A6" : "git.corp.adobe.com\/sparent\/ic_chrome",
+    "5BB403B4B79982711C8700246A9885185365A360" : "..\/stlab\/adobe_source_libraries",
+    "D16DA776B0E0F0A2C4BEF807DD901357B8E817C1" : "..\/stlab\/libraries",
+    "F68CAB7CF070A331E355D5822E10233633A29D59" : "..\/eriniebler\/range-v3",
+    "5DF239B4-6051-4D60-AAF1-95387278E147" : "stlab\/adobe_source_libraries"
+  },
+  "DVTSourceControlWorkspaceBlueprintNameKey" : "scratch",
+  "DVTSourceControlWorkspaceBlueprintVersion" : 204,
+  "DVTSourceControlWorkspaceBlueprintRelativePathToProjectKey" : "scratch.xcworkspace",
+  "DVTSourceControlWorkspaceBlueprintRemoteRepositoriesKey" : [
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "ssh:\/\/git.corp.adobe.com\/sparent\/ic_chrome.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "01F9EDC5-2143-4177-8E3A-218D0C9810A6"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "git.corp.adobe.com:sparent\/ic_chrome.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "15995E0C9CDE61F407FB9EE700461F8501EE3237"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/stlab\/adobe_source_libraries.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "5BB403B4B79982711C8700246A9885185365A360"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/stlab\/adobe_source_libraries.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "5DF239B4-6051-4D60-AAF1-95387278E147"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/stlab\/double-conversion.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "75EA7FDD-5620-4538-BA02-CA4CA5B0EDA1"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/stlab\/double-conversion.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "A0F2B7F0D4854E0CD80891D6C04B171B4954D2AF"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/stlab\/libraries.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "D16DA776B0E0F0A2C4BEF807DD901357B8E817C1"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/sean-parent\/scratch.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "F002BD5A0FCAA52F5A9A336B4441AA6158FD59B1"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/ericniebler\/range-v3.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "F68CAB7CF070A331E355D5822E10233633A29D59"
+    }
+  ]
+}

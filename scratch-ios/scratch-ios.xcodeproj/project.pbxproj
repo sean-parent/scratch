@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		9A168DE71AEEF18D00BDDCAE /* lib.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A168DE41AEEF14700BDDCAE /* lib.framework */; };
 		9A8C26751977253900972F12 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26741977253900972F12 /* Foundation.framework */; };
 		9A8C26771977253900972F12 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26761977253900972F12 /* CoreGraphics.framework */; };
 		9A8C26791977253900972F12 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26781977253900972F12 /* UIKit.framework */; };
@@ -17,11 +18,32 @@
 		9A8C268F1977253900972F12 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26741977253900972F12 /* Foundation.framework */; };
 		9A8C26901977253900972F12 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A8C26781977253900972F12 /* UIKit.framework */; };
 		9A8C26981977253900972F12 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 9A8C26961977253900972F12 /* InfoPlist.strings */; };
-		9A8C269A1977253900972F12 /* scratch_iosTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A8C26991977253900972F12 /* scratch_iosTests.m */; };
-		9A8C26A41977258F00972F12 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9A8C26A31977258F00972F12 /* main.cpp */; };
+		9A8C269A1977253900972F12 /* scratch_iosTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9A8C26991977253900972F12 /* scratch_iosTests.mm */; };
+		9AF54EBE1AF00B85006475D7 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9A8C26A31977258F00972F12 /* main.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		9A168DE31AEEF14700BDDCAE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A168DDE1AEEF14700BDDCAE /* lib.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 9A168DC21AEEF0D100BDDCAE;
+			remoteInfo = lib;
+		};
+		9A168DE51AEEF14700BDDCAE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A168DDE1AEEF14700BDDCAE /* lib.xcodeproj */;
+			proxyType = 2;
+			remoteGlobalIDString = 9A168DCD1AEEF0D100BDDCAE;
+			remoteInfo = libTests;
+		};
+		9A168DE81AEEF1A400BDDCAE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A168DDE1AEEF14700BDDCAE /* lib.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = 9A168DC11AEEF0D100BDDCAE;
+			remoteInfo = lib;
+		};
 		9A8C26911977253900972F12 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9A8C26691977253900972F12 /* Project object */;
@@ -32,13 +54,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		9A168DDE1AEEF14700BDDCAE /* lib.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = lib.xcodeproj; path = lib/lib.xcodeproj; sourceTree = "<group>"; };
 		9A8C26711977253900972F12 /* scratch-ios.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "scratch-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9A8C26741977253900972F12 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		9A8C26761977253900972F12 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		9A8C26781977253900972F12 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		9A8C267C1977253900972F12 /* scratch-ios-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "scratch-ios-Info.plist"; sourceTree = "<group>"; };
 		9A8C267E1977253900972F12 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		9A8C26801977253900972F12 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		9A8C26801977253900972F12 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		9A8C26821977253900972F12 /* scratch-ios-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "scratch-ios-Prefix.pch"; sourceTree = "<group>"; };
 		9A8C26831977253900972F12 /* STLAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = STLAppDelegate.h; sourceTree = "<group>"; };
 		9A8C26841977253900972F12 /* STLAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = STLAppDelegate.m; sourceTree = "<group>"; };
@@ -47,7 +70,7 @@
 		9A8C268D1977253900972F12 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 		9A8C26951977253900972F12 /* scratch-iosTests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "scratch-iosTests-Info.plist"; sourceTree = "<group>"; };
 		9A8C26971977253900972F12 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		9A8C26991977253900972F12 /* scratch_iosTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = scratch_iosTests.m; sourceTree = "<group>"; };
+		9A8C26991977253900972F12 /* scratch_iosTests.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = scratch_iosTests.mm; sourceTree = "<group>"; };
 		9A8C26A31977258F00972F12 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -56,6 +79,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9A168DE71AEEF18D00BDDCAE /* lib.framework in Frameworks */,
 				9A8C26771977253900972F12 /* CoreGraphics.framework in Frameworks */,
 				9A8C26791977253900972F12 /* UIKit.framework in Frameworks */,
 				9A8C26751977253900972F12 /* Foundation.framework in Frameworks */,
@@ -75,9 +99,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		9A168DDF1AEEF14700BDDCAE /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9A168DE41AEEF14700BDDCAE /* lib.framework */,
+				9A168DE61AEEF14700BDDCAE /* libTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		9A8C26681977253900972F12 = {
 			isa = PBXGroup;
 			children = (
+				9A168DDE1AEEF14700BDDCAE /* lib.xcodeproj */,
 				9A8C267A1977253900972F12 /* scratch-ios */,
 				9A8C26931977253900972F12 /* scratch-iosTests */,
 				9A8C26731977253900972F12 /* Frameworks */,
@@ -122,7 +156,7 @@
 				9A8C267C1977253900972F12 /* scratch-ios-Info.plist */,
 				9A8C267D1977253900972F12 /* InfoPlist.strings */,
 				9A8C26A31977258F00972F12 /* main.cpp */,
-				9A8C26801977253900972F12 /* main.m */,
+				9A8C26801977253900972F12 /* main.mm */,
 				9A8C26821977253900972F12 /* scratch-ios-Prefix.pch */,
 			);
 			name = "Supporting Files";
@@ -131,7 +165,7 @@
 		9A8C26931977253900972F12 /* scratch-iosTests */ = {
 			isa = PBXGroup;
 			children = (
-				9A8C26991977253900972F12 /* scratch_iosTests.m */,
+				9A8C26991977253900972F12 /* scratch_iosTests.mm */,
 				9A8C26941977253900972F12 /* Supporting Files */,
 			);
 			path = "scratch-iosTests";
@@ -160,6 +194,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				9A168DE91AEEF1A400BDDCAE /* PBXTargetDependency */,
 			);
 			name = "scratch-ios";
 			productName = "scratch-ios";
@@ -212,6 +247,12 @@
 			mainGroup = 9A8C26681977253900972F12;
 			productRefGroup = 9A8C26721977253900972F12 /* Products */;
 			projectDirPath = "";
+			projectReferences = (
+				{
+					ProductGroup = 9A168DDF1AEEF14700BDDCAE /* Products */;
+					ProjectRef = 9A168DDE1AEEF14700BDDCAE /* lib.xcodeproj */;
+				},
+			);
 			projectRoot = "";
 			targets = (
 				9A8C26701977253900972F12 /* scratch-ios */,
@@ -219,6 +260,23 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXReferenceProxy section */
+		9A168DE41AEEF14700BDDCAE /* lib.framework */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.framework;
+			path = lib.framework;
+			remoteRef = 9A168DE31AEEF14700BDDCAE /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		9A168DE61AEEF14700BDDCAE /* libTests.xctest */ = {
+			isa = PBXReferenceProxy;
+			fileType = wrapper.cfbundle;
+			path = libTests.xctest;
+			remoteRef = 9A168DE51AEEF14700BDDCAE /* PBXContainerItemProxy */;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+/* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
 		9A8C266F1977253900972F12 /* Resources */ = {
@@ -245,7 +303,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9A8C26A41977258F00972F12 /* main.cpp in Sources */,
+				9AF54EBE1AF00B85006475D7 /* main.cpp in Sources */,
 				9A8C26851977253900972F12 /* STLAppDelegate.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -254,13 +312,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9A8C269A1977253900972F12 /* scratch_iosTests.m in Sources */,
+				9A8C269A1977253900972F12 /* scratch_iosTests.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		9A168DE91AEEF1A400BDDCAE /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = lib;
+			targetProxy = 9A168DE81AEEF1A400BDDCAE /* PBXContainerItemProxy */;
+		};
 		9A8C26921977253900972F12 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 9A8C26701977253900972F12 /* scratch-ios */;
@@ -292,7 +355,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -302,6 +365,10 @@
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_EXPLICIT_OWNERSHIP_TYPE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_RECEIVER_WEAK = YES;
+				CLANG_WARN_OBJC_REPEATED_USE_OF_WEAK = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
@@ -320,7 +387,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 7.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.3;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -331,7 +398,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -341,6 +408,10 @@
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_EXPLICIT_OWNERSHIP_TYPE = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_RECEIVER_WEAK = YES;
+				CLANG_WARN_OBJC_REPEATED_USE_OF_WEAK = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
@@ -353,7 +424,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 7.1;
+				IPHONEOS_DEPLOYMENT_TARGET = 8.3;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -451,6 +522,7 @@
 				9A8C269F1977253900972F12 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		9A8C26A01977253900972F12 /* Build configuration list for PBXNativeTarget "scratch-iosTests" */ = {
 			isa = XCConfigurationList;
@@ -459,6 +531,7 @@
 				9A8C26A21977253900972F12 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

@@ -1,3 +1,33 @@
+
+#include <type_traits>
+#include <iostream>
+
+using namespace std;
+
+constexpr bool BOOL_CONTROLLER = 1;
+
+template <typename T, bool B = BOOL_CONTROLLER>
+inline auto foo(T x) -> enable_if_t<B>
+{
+    cout << x << endl;
+}
+
+template <typename T, bool B = BOOL_CONTROLLER>
+inline auto foo(T x) -> enable_if_t<!B>
+{
+    // Not an error because bar(x) depends on type T
+    // but will not be instantiated.
+    // If you replace T with int, becomes an error.
+    bar(x); // function bar not defined
+};
+
+int main() {
+    foo(10);
+
+    int i = 5;
+    void (^b)() = [=]{ cout << i << endl; };
+}
+
 #if 0
 
 #include <AppKit/AppKit.h>

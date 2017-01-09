@@ -17,6 +17,8 @@
 #include <iostream>
 using namespace std;
 
+// int foo() { thread_local int x = 5; return x; }
+
 int main(int argc, char *argv[])
 {
     int i;
