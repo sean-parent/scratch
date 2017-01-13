@@ -1,7 +1,118 @@
+#if 0
+
+#include <functional>
+#include <future>
+#include <type_traits>
+
+#include <dispatch/dispatch.h>
+
+namespace stlab {
+
+template <class Function, class... Args>
+auto async(Function&& f, Args&&... args )
+{
+    using result_type = std::result_of_t<std::decay_t<Function>(std::decay_t<Args>...)>;
+    using packaged_type = std::packaged_task<result_type()>;
+    
+    auto _p = new packaged_type(std::bind([_f = std::forward<Function>(f)](Args&... args) {
+        return _f(std::move(args)...);
+    }, std::forward<Args>(args)...));
+    
+    auto result = _p->get_future();
+
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            _p, [](void* p) {
+                auto _p = static_cast<packaged_type*>(p);
+                (*_p)();
+                delete _p;
+            });
+    
+    return result;
+}
+
+} // namespace stlab
+
+#include <algorithm>
+#include <thread>
+#include <chrono>
+#include <iostream>
+#include <forward_list>
+#include <memory>
+
+using namespace std;
+using namespace std::chrono;
+using namespace std::chrono_literals;
+
+template <class I, class N>
+I reverse_n_forward(I f, N n) {
+    if (n < 2) return next(f, n);
+
+    auto h = n / 2;
+
+    I m = reverse_n_forward(f, h);
+    I m2 = next(m, n % 2);
+    I l = reverse_n_forward(m2, h);
+    swap_ranges(f, m, m2);
+    return l;
+}
+
+template <class I>
+void reverse_forward(I f, I l) {
+    reverse_n_forward(f, distance(f, l));
+}
+
+template <class I>
+void reverse_(I f, I l) {
+    auto n = distance(f, l);
+    if (n < 2) return;
+
+    auto m1 = next(f, n / 2);
+    auto m2 = next(m1, n % 2);
+    reverse(f, m1);
+    reverse(m2, l);
+    swap_ranges(f, m1, m2);
+}
+
+template <class ForwardIterator, class N>
+auto reverse_n(ForwardIterator f, N n) {
+    if (n < 2) return next(f, n);
+
+    auto h = n / 2;
+    auto m1 = reverse_n(f, h);
+    auto m2 = next(m1, n % 2);
+    auto l = reverse_n(m2, h);
+    swap_ranges(f, m1, m2);
+    return l;
+}
+
+template <class ForwardIterator>
+void reverse(ForwardIterator f, ForwardIterator l) {
+    reverse_n(f, distance(f, l));
+}
+
+int main() {
+    std::forward_list<int> x = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    ::reverse(begin(x), end(x));
+    for (const auto& e : x) cout << e << endl;
+
+    auto p = stlab::async([](int x){ cout << "begin:" << x << endl; this_thread::sleep_for(3s); cout << "end" << endl; }, 42);
+    this_thread::sleep_for(1s);
+    cout << "test" << endl;
+    p.get();
+    
+    {
+    auto p = stlab::async([](unique_ptr<int> x){ cout << "move_only:" << *x << endl; },
+        make_unique<int>(128));
+    p.wait();
+    }
+}
 
 
 
-#if 1
+#endif
+
+
+#if 0
 
 #include <future>
 #include <iostream>
@@ -69,7 +180,7 @@ class registry {
         _map.emplace(move(key), move(value));
     }
     
-    string get(const string& key) {
+    auto get(const string& key) -> string {
         unique_lock<mutex> lock(mutex);
         return _map.at(key);
     }
@@ -77,22 +188,19 @@ class registry {
 
 
 class async_registry {
-
-    // NOTE: destruction order matters
-    
     serial_queue _q;
     
-    using map_t = unordered_map<string, annotate>;
+    using map_t = unordered_map<string, string>;
     
     shared_ptr<map_t> _map = make_shared<map_t>();
 public:
-    void set(string key, annotate value) {
-        _q.async([_map = _map](string key, annotate value) {
+    void set(string key, string value) {
+        _q.async([_map = _map](string key, string value) {
             _map->emplace(move(key), move(value));
         }, move(key), move(value)) /* .detatch() */;
     }
     
-    auto get(string key) {
+    auto get(string key) -> future<string> {
         return _q.async([_map = _map](string key) {
             return _map->at(key);
         }, move(key));
@@ -101,24 +209,19 @@ public:
 
 int main() {
 
-    auto f = async([](annotate x){ return x; }, annotate());
-    auto a = f.get();
-
-#if 0
-    std::future<annotate> result;
+    std::future<string> result;
     {
     async_registry registry;
     
-    registry.set("Hello", annotate());
+    registry.set("Hello", "world");
     result = registry.get("Hello");
     }
     
     try {
-        result.get();
+        cout << result.get() << endl;
     } catch (std::exception& error) {
         cout << "error: " << error.what() << endl;
     }
-#endif
 }
 
 #endif
@@ -263,7 +366,7 @@ int main() {
 
 #endif
 
-#if 0
+#if 1
 
 #include <thread>
 #include <iostream>
@@ -280,18 +383,21 @@ using namespace std;
     that test.
 */
 
-#if 0
-#define TEST_USE_ASIO 0
+#if 1
+#define TEST_USE_ASIO 1
 #define TEST_USE_GCD 0
 #define TEST_USE_QUEUE 0
 #define TEST_USE_SMQUEUE 0
-#define TEST_USE_MQUEUE 1
+#define TEST_USE_MQUEUE 0
 #endif
 
+
+#if 0
 // #define TEST_USE_GCD 1
 #define TEST_USE_MQUEUE 1
 #define K 56
 #define K2 1
+#endif
 
 #if 0
 #define TEST_USE_BITQUEUE 1
