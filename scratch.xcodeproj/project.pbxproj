@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9A97A5D21D99AB11000DE445 /* future.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9A97A5D11D99AB11000DE445 /* future.cpp */; };
+		9A06D0FF1E383BAF0055FA2D /* thread.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEA1A971C8D00207431 /* thread.cpp */; };
+		9A06D1001E383BD10055FA2D /* future.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE71A971C8D00207431 /* future.cpp */; };
+		9A06D1031E383BF90055FA2D /* tss_null.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEC1A971C8D00207431 /* tss_null.cpp */; };
+		9A06D1041E383C3E0055FA2D /* once.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE91A971C8D00207431 /* once.cpp */; };
 		9AA9F04F1E2847ED00DD67D5 /* error_code.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBF21A971D0C00207431 /* error_code.cpp */; };
 		9AAE19E416F81487007BC561 /* scratch.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 9AAE19E316F81487007BC561 /* scratch.1 */; };
-		9AAFC9C31DCD95E200B0A851 /* teststatic.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9AAFC9C21DCD95E100B0A851 /* teststatic.framework */; };
 		9AEAFCB51B1530F800FF6A27 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9AAE19E116F81487007BC561 /* main.cpp */; };
 /* End PBXBuildFile section */
 
@@ -78,7 +80,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9AAFC9C31DCD95E200B0A851 /* teststatic.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -252,8 +253,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9A97A5D21D99AB11000DE445 /* future.cpp in Sources */,
 				9AEAFCB51B1530F800FF6A27 /* main.cpp in Sources */,
+				9A06D1031E383BF90055FA2D /* tss_null.cpp in Sources */,
+				9A06D1041E383C3E0055FA2D /* once.cpp in Sources */,
+				9A06D0FF1E383BAF0055FA2D /* thread.cpp in Sources */,
+				9A06D1001E383BD10055FA2D /* future.cpp in Sources */,
 				9AA9F04F1E2847ED00DD67D5 /* error_code.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

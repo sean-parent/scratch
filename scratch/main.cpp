@@ -1,3 +1,1170 @@
+#include <algorithm>
+#include <iostream>
+#include <string>
+
+using namespace std;
+
+/*
+Simulate this data call
+
+    String^ input = TextInput->Text;
+
+    ... input->Data() ...
+
+*/
+wstring Data() { return L"Hello World!"; }
+
+
+ 
+wstring /* TestFuncs:: */ReverseString(wstring input)
+{
+    reverse(begin(input), end(input));
+    return input;
+}
+
+int main() {
+
+    /*
+        To avoid a copy, we pass the temproary directly to ReverString()
+        
+        You could also call as:
+        {
+        auto tmp = Data();
+        auto str = ReverseString(move(tmp)); // Last use of tmp
+        }
+    */
+
+    auto str = /* SharedLib::TestFuncs:: */ ReverseString(Data());
+
+    wcout << str << endl;
+}
+
+
+
+
+#if 0
+#include <iostream>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+annotate f() {
+    annotate x;
+    return x;
+}
+
+int main() {
+
+    auto x = f();
+}
+#endif
+
+#if 0
+
+
+#include <future>
+#include <memory>
+
+#include <dispatch/dispatch.h>
+
+namespace stlab {
+
+template <class Sig, class F>
+auto cancelable_task(F&& f) {
+    using shared_t = std::packaged_task<Sig>;
+
+    auto p = std::make_shared<shared_t>(std::forward<F>(f));
+    auto r = p->get_future();
+
+    return std::make_pair([_p = std::weak_ptr<shared_t>(p)] (auto&&... args) {
+        auto p = _p.lock();
+        if (!p) return;
+        (*p)(std::forward<decltype(args)>(args)...);
+    },
+    std::async(std::launch::deferred, [_p = std::move(p), _r = std::move(r)] () mutable {
+        return _r.get();
+    }));
+}
+
+template <class T>
+    struct shared_type {
+        T _task;
+        std::atomic_flag _flag = ATOMIC_FLAG_INIT;
+
+        template <class U>
+        explicit shared_type(U&& x) : _task(std::forward<U>(x)) { }
+    };
+
+template <class F, class... Args>
+auto promotable_task(F&& f, Args&&... args) {
+    using result_t = std::result_of_t<std::decay_t<F>(std::decay_t<Args>...)>;
+    using packaged_t = std::packaged_task<result_t()>;
+
+    using shared_t = shared_type<packaged_t>;
+
+
+#if 0
+    struct shared_t {
+        packaged_t _task;
+        std::atomic_flag _flag = ATOMIC_FLAG_INIT;
+
+        explicit shared_t(packaged_t&& x) : _task(std::move(x)) { }
+    };
+#endif
+
+    auto p = std::make_shared<shared_t>(std::bind([_f = std::forward<F>(f)](Args&... args) {
+        return _f(std::move(args)...);
+    }, std::forward<Args>(args)...));
+
+    auto r = p->_task.get_future();
+
+    return std::make_pair([_p = std::weak_ptr<shared_t>(p)] () {
+        auto p = _p.lock();
+        if (!p || p->_flag.test_and_set()) return;
+        p->_task();
+    },
+    std::async(std::launch::deferred, [_p = std::move(p), _r = std::move(r)] () mutable {
+        if (!_p->_flag.test_and_set()) _p->_task();
+        return _r.get();
+    }));
+}
+
+template <class Function, class... Args>
+auto async(Function&& f, Args&&... args )
+{
+    auto task_future = promotable_task(std::forward<Function>(f), std::forward<Args>(args)...);
+
+    using task_t = decltype(task_future.first);
+
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+        new task_t(std::move(task_future.first)), [](void* _p){
+            auto p = static_cast<task_t*>(_p);
+            (*p)();
+            delete p;
+        });
+
+    return std::move(task_future.second);
+}
+
+
+} // namespace stlab
+
+#include <iostream>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+int main() {
+    {
+    cout << "test 1" << endl;
+    auto task_future = stlab::cancelable_task<unique_ptr<int>(unique_ptr<int>)>([](unique_ptr<int> x) {
+        ++(*x);
+        cout << "executed: " << *x << endl;
+        return x;
+    });
+
+    task_future.first(make_unique<int>(3));
+    cout << *task_future.second.get() << endl;
+    }
+
+    {
+    cout << "test 2" << endl;
+    auto task_future = stlab::cancelable_task<unique_ptr<int>(unique_ptr<int>)>([](unique_ptr<int> x) {
+        ++(*x);
+        cout << "executed: " << *x << endl;
+        return x;
+    });
+
+    cout << "canceling" << endl;
+
+    task_future.second = future<unique_ptr<int>>();
+
+    task_future.first(make_unique<int>(3));
+    }
+
+    
+    {
+    cout << "test 3" << endl;
+    auto task_future = stlab::promotable_task([](unique_ptr<int> x) {
+        ++(*x);
+        cout << "executed: " << *x << endl;
+        return x;
+    }, make_unique<int>(3));
+
+    task_future.first();
+
+    cout << *task_future.second.get() << endl;
+    }
+
+    {
+    cout << "test 4" << endl;
+    auto task_future = stlab::promotable_task([](unique_ptr<int> x) {
+        ++(*x);
+        cout << "executed: " << *x << endl;
+        return x;
+    }, make_unique<int>(3));
+
+    cout << "promoting" << endl;
+
+    cout << *task_future.second.get() << endl;
+    }
+
+    {
+    cout << "test 5" << endl;
+    auto task_future = stlab::promotable_task([](unique_ptr<int> x) {
+        ++(*x);
+        cout << "executed: " << *x << endl;
+        return x;
+    }, make_unique<int>(3));
+
+    cout << "canceling" << endl;
+    task_future.second = future<unique_ptr<int>>();
+    task_future.first();
+    }
+
+    {
+    auto x = stlab::async([](int x){ return x; }, 42);
+    cout << x.get() << endl;
+    }
+
+    {
+    auto x = stlab::async([](annotate x){ return x; }, annotate());
+    x.get();
+    }
+
+}
+
+#endif
+
+#if 0
+
+#include <algorithm>
+#include <iterator>
+
+namespace stlab {
+
+/*
+    NOTE (sparent) : This routine requires forward ranges and is non-optimial unless
+    called with random access ranges.
+*/
+
+template <class R1, class R2>
+auto copy_bounded(const R1& src, R2& dst) {
+    auto size = std::min(std::distance(std::begin(src), std::end(src)),
+                         std::distance(std::begin(dst), std::end(dst)));
+
+    return std::make_pair(std::begin(src) + size,
+                          std::copy_n(std::begin(src), size, std::begin(dst)));
+}
+
+} // namespace stlab
+
+#include <iostream>
+
+int main() {
+    char test[] = "this is a test";
+    char output1[256];
+    stlab::copy_bounded(test, output1);
+
+    std::cout << output1 << std::endl;
+}
+
+#endif
+
+
+
+#if 0
+
+#include <functional>
+#include <future>
+#include <memory>
+#include <type_traits>
+
+#include <boost/thread/future.hpp>
+
+#include <dispatch/dispatch.h>
+
+namespace stlab {
+
+#if 0
+template <class> class cancelable_task;
+
+template <class R, class ...Args>
+class cancelable_task<R(Args...)> {
+
+    struct shared_t {
+        std::packaged_task<R(Args...)>   _f;
+        std::future<R>                  _result;
+        std::atomic_flag                _start = ATOMIC_FLAG_INIT;
+
+        explicit shared_t(packaged_type&& f) : _f(std::move(f)), _result(_f.get_future()) { }
+
+        void run(Args... args) {
+            if (!_start.test_and_set()) _f(std::forward<Args>(args)...);
+        }
+    };
+
+    std::weak_ptr<shared_t> _shared;
+    std::future<R> _future;
+
+public:
+    using result_type = R;
+
+    // construction and destruction
+    cancelable_task() noexcept = default;
+    template <class F>
+        explicit cancelable_task(F&& f);
+    ~cancelable_task() = default;
+
+    // no copy
+    cancelable_task(const cancelable_task&) = delete;
+    cancelable_task& operator=(const cancelable_task&) = delete;
+
+    // move support
+    cancelable_task(cancelable_task&&) noexcept = default;
+    cancelable_task& operator=( cancelable_task&&) noexcept = default;
+
+    void swap(cancelable_task& other) noexcept { std::swap(_shared, other._shared); }
+
+    bool valid() const noexcept { return _shared; }
+
+    // result retrieval
+    std::future<R> get_future() {
+        return std::move(_future);
+    }
+
+    // execution
+    void operator()(Args...);
+
+    void reset();
+};
+
+template< class Function, class... Args >
+void swap( cancelable_task<Function(Args...)> &lhs,
+           cancelable_task<Function(Args...)> &rhs ) noexcept {
+    return lhs.swap(rhs);
+}
+
+#endif
+
+namespace detail {
+
+template <typename>
+struct result_of_;
+
+template <typename R, typename... Args>
+struct result_of_<R(Args...)> { using type = R; };
+
+template <typename F>
+using result_of_t_ = typename result_of_<F>::type;
+
+
+template <typename Sig>
+struct shared {
+    using packaged_t = std::packaged_task<Sig>;
+
+    packaged_t _f;
+    std::future<result_of_t_<Sig>> _result;
+    std::atomic_flag _start = ATOMIC_FLAG_INIT;
+};
+
+} // namespace detail
+
+template <class> struct packaged_task;
+
+template <class R, class... Args>
+class packaged_task<R(Args...)> {
+    std::weak_ptr<detail::shared<R(Args...)>> _p;
+
+  public:
+    void operator()(Args... args) {
+        auto p = _p.lock();
+        if (p) (*p)(std::move(args)...);
+    }
+};
+
+
+template <class Sig, class S, class F>
+auto cancelable_task(F f) {
+    auto p = std::make_shared<detail::shared<Sig>>(std::move(f));
+    return std::make_pair(packaged_task<Sig>(p), std::future<detail::result_of_t_<Sig>>(p));
+}
+
+#if 0
+
+template <class Function, class... Args>
+auto make_cancelable_task(Function&& f, Args&&... args) {
+    using result_type = std::result_of_t<std::decay_t<Function>(std::decay_t<Args>...)>;
+    using packaged_type = std::packaged_task<result_type()>;
+
+    struct shared_t {
+        packaged_type               _f;
+        std::future<result_type>    _result;
+        std::atomic_flag            _start = ATOMIC_FLAG_INIT;
+
+        explicit shared_t(packaged_type&& f) : _f(std::move(f)), _result(_f.get_future()) { }
+
+        void run() {
+            if (!_start.test_and_set()) _f();
+        }
+    };
+
+    auto shared = std::make_shared<shared_t>(packaged_type(std::bind([](Function& f, Args&... args) {
+        return f(std::move(args)...);
+    }, std::forward<Function>(f), std::forward<Args>(args)...)));
+
+    return std::make_pair([_p = std::weak_ptr<shared_t>(shared)]{
+        auto p = _p.lock();
+        if (p) p->run();
+    }, std::async(std::launch::deferred, [_p = shared] {
+        _p->run();
+        return _p->_result.get();
+    }));
+}
+
+#endif
+
+template <class Function, class... Args>
+auto async(Function&& f, Args&&... args )
+{
+    auto task_future = cancelable_task(std::forward<Function>(f), std::forward<Args>(args)...);
+
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+        new decltype(task_future.first)(std::move(task_future.first)), [](void* _p){
+            auto p = static_cast<decltype(task_future.first)*>(_p);
+            (*p)();
+            delete p;
+        });
+
+    return std::move(task_future.second);
+}
+
+#if 0
+template <class Function, class... Args>
+auto async(Function&& f, Args&&... args )
+{
+    using result_type = std::result_of_t<std::decay_t<Function>(std::decay_t<Args>...)>;
+    using packaged_type = std::packaged_task<result_type()>;
+
+    struct shared_t {
+        packaged_type               _f;
+        std::future<result_type>    _result;
+        std::atomic_flag            _start = ATOMIC_FLAG_INIT;
+
+        explicit shared_t(packaged_type f) : _f(std::move(f)), _result(_f.get_future()) { }
+
+        void run() { if (!_start.test_and_set()) _f(); }
+    };
+
+    auto shared = std::make_shared<shared_t>(packaged_type(std::bind([_f = std::forward<Function>(f)](Args&... args) {
+        return _f(std::move(args)...);
+    }, std::forward<Args>(args)...)));
+
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+        new std::weak_ptr<shared_t>(shared), [](void* _p){
+            auto p = static_cast<std::weak_ptr<shared_t>*>(_p);
+            auto lock = p->lock();
+            if (lock) lock->run();
+            delete p;
+        });
+
+    return std::async(std::launch::deferred, [_shared = shared] {
+        _shared->run(); return _shared->_result.get();
+    });
+}
+#endif
+
+} // namespace stlab
+
+#include <iostream>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+int main() {
+    {
+    auto x = stlab::async([_a = annotate()]{
+        cout << "executed" << endl;
+    });
+
+    x.get();
+    cout << "about to dtor" << endl;
+    }
+
+    cout << "cancel" << endl;
+
+    stlab::async([_a = annotate()]{
+        cout << "executed" << endl;
+    });
+
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+int main() {
+    auto f = std::async(std::launch::deferred, [_a = annotate()]{
+        cout << "invoked" << endl;
+    });
+
+    f.get();
+}
+#endif
+
+#if 0
+
+#include <functional>
+#include <future>
+#include <type_traits>
+
+#include <dispatch/dispatch.h>
+
+namespace stlab {
+
+template <class Function, class... Args>
+auto async(Function&& f, Args&&... args )
+{
+    using result_type = std::result_of_t<std::decay_t<Function>(std::decay_t<Args>...)>;
+    using packaged_type = std::packaged_task<result_type()>;
+    
+    auto _p = new packaged_type(std::bind([_f = std::forward<Function>(f)](Args&... args) {
+        return _f(std::move(args)...);
+    }, std::forward<Args>(args)...));
+
+    auto result = p->get_future();
+
+    dispatch_async_f(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0),
+            p, [](void* f_) {
+                packaged_type* f = static_cast<packaged_type*>(f_);
+                (*f)();
+                delete f;
+            });
+    
+    return result;
+}
+
+} // namespace stlab
+
+int main() {
+    mutex _mutex;
+    condition_variable _condition;
+    bool _done = false;
+
+    auto _future = async(std::launch::async, [&]{
+        {
+        unique_lock<mutex> _lock{_mutex};
+        _done = true;
+        }
+        _condition.notify_one();
+    });
+
+    {
+    unique_lock<mutex> _lock{_mutex};
+    while (!_done) _condition.wait(_lock);
+    }
+
+    _future.wait();
+}
+#endif
+
+#if 0
+
+#include <iostream>
+
+using namespace std;
+
+#if 0
+// If C++ had tail recursion
+
+int helper(int n, int result) {
+    return n <= 1 ? result : helper(n - 1, n * result);
+}
+
+int factorial(int n) {
+    return helper(n, 1);
+}
+
+int main() {
+
+    cout << factorial(10) << endl;
+}
+#endif
+
+int factorial(int n) {
+    int result = 1;
+    for (int i = 2; i <= n; ++i) {
+        result *= i;
+    }
+    return result;
+}
+
+#endif
+
+
+#if 0
+
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <future>
+#include <boost/optional.hpp>
+#include <boost/thread/future.hpp>
+
+namespace stlab {
+
+class process {
+    struct concept {
+        virtual ~concept() = default;
+    };
+
+    template <typename T>
+    struct model : concept {
+        template <typename... Args>
+        model(Args&&... args) : _self(std::forward<Args>(args)...) { }
+        T _self;
+    };
+
+    std::shared_ptr<concept> _p;
+
+    template <class T, class... Args>
+    friend  process make_process(Args&&... args);
+
+    process(std::shared_ptr<concept> p) : _p(std::move(p)) { }
+  public:
+    process() = default;
+};
+
+namespace detail {
+
+template <class T>
+struct shared_sender {
+    virtual boost::future<void> send(T x) = 0;
+    virtual void close() = 0;
+    virtual void set_process(process) = 0;
+};
+
+template <class T>
+struct shared_receiver {
+    virtual boost::future<boost::optional<T>> receive() = 0;
+};
+
+template <class T>
+struct shared_channel final : shared_sender<T>, shared_receiver<T> {
+    process _process;
+
+    std::mutex _mutex;
+    std::deque<T> _q;
+    bool _closed = false;
+    std::size_t _buffer_size = 1;
+    boost::optional<boost::promise<boost::optional<T>>> _receive_promise;
+    boost::optional<boost::promise<void>> _send_promise;
+
+    /*
+        REVISIT : No flow control. Send should return a future<void> which is auto resolved
+        if there is space in the queue, otherwise it isn't resolved until there is space.
+    */
+
+    boost::future<void> send(T x) override {
+        std::lock_guard<std::mutex> lock(_mutex);
+        // REVISIT : set_value() under the lock might deadlock if immediate continuation?
+        if (_q.empty() && _receive_promise) {
+            _receive_promise->set_value(std::move(x));
+            _receive_promise.reset();
+            return boost::make_ready_future();
+        }
+        _q.emplace_back(std::move(x));
+        if (_q.size() == _buffer_size) {
+            _send_promise = boost::promise<void>();
+            return _send_promise.get().get_future();
+        }
+        return boost::make_ready_future();
+    }
+
+    void close() override {
+        std::lock_guard<std::mutex> lock(_mutex);
+        // REVISIT : set_value() under the lock might deadlock if immediate continuation?
+        if (_q.empty() && _receive_promise) _receive_promise.get().set_value(boost::optional<T>());
+        else _closed = true;
+    }
+
+    void set_process(process p) override {
+        // Should not need to lock, can only be set once and controls lifetime of process bound
+        // to this sender
+        _process = std::move(p);
+    }
+
+    boost::future<boost::optional<T>> receive() override {
+        {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (!_q.empty()) {
+            auto result = boost::make_ready_future<boost::optional<T>>(std::move(_q.front()));
+            _q.pop_front();
+            if (_send_promise) {
+                _send_promise->set_value();
+                _send_promise.reset();
+            }
+            return result;
+        }
+        if (_closed) {
+            return boost::make_ready_future<boost::optional<T>>();
+        }
+        _receive_promise = boost::promise<boost::optional<T>>();
+        return _receive_promise.get().get_future();
+        }
+    }
+};
+
+} // namespace detail
+
+template <class T> class receiver;
+
+template <class T>
+class sender {
+    std::weak_ptr<detail::shared_sender<T>> _p;
+
+    template <class U>
+    friend std::pair<sender<U>, receiver<U>> channel();
+
+    sender(std::weak_ptr<detail::shared_sender<T>> p) : _p(std::move(p)) { }
+
+  public:
+    sender() = default;
+
+    boost::future<void> operator()(T x) const {
+        auto p = _p.lock();
+        if (!p) return boost::make_ready_future();
+        return p->send(std::move(x));
+    }
+    void close() const {
+        auto p = _p.lock();
+        if (!p) return;
+        p->close();
+    }
+
+    /*
+        REVISIT : the process being set must hold the sender (this completes a strong/weak cycle).
+        Is there a better way?
+    */
+    void set_process(process x) const {
+        auto p = _p.lock();
+        if (!p) return;
+        p->set_process(std::move(x));
+    }
+};
+
+template <class T>
+class receiver {
+    std::shared_ptr<detail::shared_receiver<T>> _p;
+
+    template <class U>
+    friend std::pair<sender<U>, receiver<U>> channel();
+
+    receiver(std::shared_ptr<detail::shared_receiver<T>> p) : _p(std::move(p)) { }
+  public:
+    receiver() = default;
+    boost::future<boost::optional<T>> operator()() const {
+        return _p->receive();
+    }
+};
+
+template <class T>
+std::pair<sender<T>, receiver<T>> channel() {
+    auto p = std::make_shared<detail::shared_channel<T>>();
+    return std::make_pair<sender<T>, receiver<T>>(sender<T>(p), receiver<T>(p));
+}
+
+template <class T, class... Args>
+process make_process(Args&&... args) {
+    return process(std::make_shared<process::model<T>>(std::forward<Args>(args)...));
+}
+
+
+} // namespace stlab
+
+struct mul2 {
+    stlab::receiver<int> _receive;
+    stlab::sender<int> _send;
+
+    mul2(stlab::receiver<int> receive, stlab::sender<int> send) :
+        _receive(std::move(receive)), _send(std::move(send)) {
+
+        run();
+    }
+
+    void run() {
+        _receive().then([this](auto x){
+            auto opt = x.get();
+            if (!opt) _send.close();
+            _receive().then([this, _x = *opt](auto y){
+                auto opt = y.get();
+                if (!opt) _send(_x).then([this](auto){ _send.close(); });
+                else _send(_x * *opt).then([this](auto){ run(); });
+            });
+        });
+    }
+};
+
+struct iota {
+    stlab::sender<int> _send;
+
+    int _min;
+    int _max;
+
+    iota(stlab::sender<int> send, int min, int max) :
+        _send(std::move(send)), _min(min), _max(max) {
+
+        run();
+    }
+
+    void run() {
+        if (_min == _max) {
+            _send.close();
+            return;
+        }
+        _send(_min).then([this](auto){
+            ++_min;
+            run();
+        });
+    }
+};
+
+struct sum {
+    stlab::receiver<int> _receive;
+    stlab::sender<int> _send;
+    int _result = 0;
+
+    sum(stlab::receiver<int> receive, stlab::sender<int> send) :
+        _receive(std::move(receive)), _send(std::move(send)) {
+
+        run();
+
+    }
+
+    void run() {
+        _receive().then([this](auto x){
+            auto opt = x.get();
+            if (!opt) {
+                _send(_result).then([this](auto){
+                    _send.close();
+                });
+                return;
+            }
+            _result += *opt;
+            run(); // continue
+        });
+    }
+};
+
+template <class F, class T> struct map;
+template <class F, class R, class A>
+struct map<F, R(A)> {
+    stlab::receiver<A> _receive;
+    stlab::sender<R> _send;
+    F _f;
+
+    map(stlab::receiver<A> receive, stlab::sender<R> send, F f) :
+        _receive(std::move(receive)), _send(std::move(send)), _f(std::move(f))
+    {
+        run();
+    }
+
+    void run() {
+        _receive().then([this](auto x){
+            auto opt = x.get();
+            if (!opt) _send.close();
+            else _send(_f(*opt)).then([this](auto){ run(); });
+        });
+    }
+};
+
+template <class T, class F, class R, class S>
+auto make_map(R&& r, S&& s, F&& f) {
+    return stlab::make_process<map<std::decay_t<F>, T>>(std::forward<R>(r), std::forward<S>(s), std::forward<F>(f));
+}
+
+int main() {
+    stlab::sender<int> send1;
+    stlab::receiver<int> receive1;
+
+    std::tie(send1, receive1) = stlab::channel<int>();
+
+    send1.set_process(stlab::make_process<iota>(send1, 0, 10));
+
+    
+    stlab::sender<int> send2;
+    stlab::receiver<int> receive2;
+
+    std::tie(send2, receive2) = stlab::channel<int>();
+
+    send2.set_process(make_map<int(int)>(receive1, send2, [](int x){ return x * 10; }));
+
+    stlab::sender<int> send3;
+    stlab::receiver<int> receive3;
+
+    std::tie(send3, receive3) = stlab::channel<int>();
+
+    send3.set_process(stlab::make_process<sum>(receive2, send3));
+
+    for (auto value = receive3().get(); value; value = receive3().get()) {
+        std::cout << *value << std::endl;
+    }
+}
+
+#endif
+
+#if 0
+#include <tuple>
+#include <iostream>
+#include <cmath>
+
+#include <stlab/future.hpp>
+#include <stlab/channel.hpp>
+
+using namespace stlab;
+using namespace std;
+using namespace std::chrono;
+
+using parameters = int;
+using frame = double;
+
+
+frame render_frame(parameters params, bool quality) {
+    return quality ? sqrt(params) : round(sqrt(params));
+}
+
+struct render {
+    process_state_scheduled _state = await_forever;
+
+    bool _final = false;
+
+    parameters _params;
+
+    void await(parameters params) {
+        _final = false;
+        _state = await_immediate;
+        _params = params;
+    }
+
+    frame yield() {
+        auto result = render_frame(_params, _final);
+        _final = !_final;
+        _state = _final ?  await_immediate : await_forever;
+        return result;
+    }
+
+    void close() { if (_state == await_immediate) _state = yield_immediate; }
+
+    const auto& state() const {
+        return _state;
+    }
+};
+
+int main() {
+
+    sender<int> send;
+    receiver<int> receive;
+
+    tie(send, receive) = channel<int>(default_scheduler());
+
+    send(3);
+    send(5);
+    send(6);
+
+    auto hold = receive
+            | (buffer_size(10) & render())
+            | [](double x){ cout << x << '\n'; };
+
+    receive.set_ready();
+
+#if 0
+    send(1);
+    send(2);
+    send(3);
+#endif
+    this_thread::sleep_for(1s);
+    send(7);
+    send(8);
+    this_thread::sleep_for(1s);
+    send(10);
+    send.close();
+
+    sleep(20);
+}
+#endif
+#if 0
+
+#include <iostream>
+
+using namespace std;
+
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+[[nodiscard]] int f() { return 5; }
+
+int main() {
+    cout << __VERSION__ << endl;
+    cout << __clang__ << endl;
+    cout << __clang_major__ << endl;
+    cout << __clang_minor__ << endl;
+    cout << __apple_build_version__ << endl;
+
+    f();
+
+
+    for(annotate (); true; ) {
+        cout << "Here" << endl;
+        break;
+     }
+
+}
+
+#endif
+#if 0
+
+#include <tuple>
+#include <iostream>
+#include <cmath>
+
+#include <stlab/future.hpp>
+#include <stlab/channel.hpp>
+
+using namespace stlab;
+using namespace std;
+using namespace std::chrono;
+
+using parameters = int;
+using frame = double;
+
+enum quality {
+    draft,
+    final
+};
+
+frame render_frame(parameters, bool);
+
+struct render {
+    process_state_scheduled _state = await_forever;
+
+    bool _final = false;
+
+    parameters _params;
+
+    void await(parameters params) {
+        _final = false;
+        _state = await_immediate;
+        _params = params;
+    }
+
+    frame yield() {
+        auto result = render_frame(_params, _final);
+        _final = !_final;
+        _state = _final ?  await_immediate : await_forever;
+        return result;
+    }
+
+    void close() { if (_state == await_immediate) _state = yield_immediate; }
+
+    const auto& state() const {
+        return _state;
+    }
+};
+
+int main() {
+
+    sender<int> send;
+    receiver<int> receive;
+
+    tie(send, receive) = channel<int>(default_scheduler());
+
+    send(1);
+    send(2);
+    send(3);
+
+    auto hold = receive
+        | (buffer_size(10) & render())
+        | [](double x){ cout << x << '\n'; };
+
+    receive.set_ready();
+
+#if 0
+    send(1);
+    send(2);
+    send(3);
+#endif
+    this_thread::sleep_for(1s);
+    send(4);
+    send(5);
+    this_thread::sleep_for(1s);
+    send(6);
+    send.close();
+
+    sleep(20);
+}
+
+#endif
+
+
 #if 0
 
 #include <functional>
@@ -120,6 +1287,8 @@ int main() {
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
+#include <iterator>
 
 #include <dispatch/dispatch.h>
 
@@ -171,6 +1340,7 @@ class serial_queue {
     }
 };
 
+#if 0
 class registry {
     mutex _mutex;
     unordered_map<string, string> _map;
@@ -186,8 +1356,10 @@ class registry {
     }
 };
 
+#else
 
-class async_registry {
+
+class registry {
     serial_queue _q;
     
     using map_t = unordered_map<string, string>;
@@ -205,16 +1377,47 @@ public:
             return _map->at(key);
         }, move(key));
     }
+
+    void set(vector<pair<string, string>> sequence) {
+        _q.async([_map = _map](vector<pair<string, string>> sequence) {
+            _map->insert(make_move_iterator(begin(sequence)), make_move_iterator(end(sequence)));
+        }, move(sequence));
+    }
 };
+
+template <typename T>
+class bad_cow {
+    struct object_t {
+        explicit object_t(const T& x) : data_m(x) {}
+        atomic<int> count_m{1};
+        T           data_m; };
+    object_t* object_m;
+ public:
+    explicit bad_cow(const T& x) : object_m(new object_t(x)) { }
+    ~bad_cow() { if (0 == --object_m->count_m) delete object_m; }
+    bad_cow(const bad_cow& x) : object_m(x.object_m) { ++object_m->count_m; }
+
+    bad_cow& operator=(const T& x) {
+        if (object_m->count_m == 1) object_m->data_m = x;
+        else {
+            object_t* tmp = new object_t(x);
+            if (0 == --object_m->count_m) delete object_m;
+            object_m = tmp;
+        }
+        return *this;
+    }
+};
+
+#endif
 
 int main() {
 
     std::future<string> result;
     {
-    async_registry registry;
+    registry r;
     
-    registry.set("Hello", "world");
-    result = registry.get("Hello");
+    r.set("Hello", "world");
+    result = r.get("Hello");
     }
     
     try {
@@ -366,7 +1569,7 @@ int main() {
 
 #endif
 
-#if 1
+#if 0
 
 #include <thread>
 #include <iostream>
