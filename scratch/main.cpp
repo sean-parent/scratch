@@ -1,3 +1,1521 @@
+#include <cassert>
+
+/*
+    APOLLO_ASSERT(exp) is yet-another-assert-macro that works like standard assert() except
+    if you are using the clang static analyzer (Analyze in Xcode), in which case the analyzer
+    will warn if the assert macro can be triggered.
+    
+    Note that normally assert() can be used to let the analyzer know that a condition cannot
+    happen to silence false positives. It does this by assuming that if the condition is met, the
+    assertion does not return and that this is expected behavior.
+    
+    Where that behavior is desirable, assert() should be used with an appropriate comment, or use
+    one of the clang attributes. <https://clang-analyzer.llvm.org/faq.html>
+    
+    In order for the static analyzer to report assert violation you need to add the following
+    to the Xcode compiler flags:
+
+    OTHER_CFLAGS = -Xclang -analyzer-checker -Xclang debug.ExprInspection
+*/
+
+#if defined(__clang_analyzer__)
+
+extern "C" void clang_analyzer_warnIfReached();
+#define APOLLO_ASSERT(exp) assert((exp) && (clang_analyzer_warnIfReached(), true))
+
+#else
+
+#define APOLLO_ASSERT(exp) assert(exp)
+
+#endif
+
+double arccos(double x) {
+    APOLLO_ASSERT((-1.0 <= x) && (x <= 1.0) && "precondition: -1.0 <= x <= 1.0");
+    //...
+    return x;
+}
+
+int main() {
+    return arccos(42.0);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#if 0
+#include <memory>
+#include <array>
+#include <iostream>
+
+using namespace std;
+
+template <class T, // T models integral type
+          class F> // F is a function void(T, T)
+void bresenham_line(T x0, T y0, T x1, T y1, F out) {
+    auto dx = x1 - x0;
+    auto dy = y1 - y0;
+    auto D = 2 * dy - dx;
+    auto y = y0;
+
+    for (auto x = x0; x != x1; ++x) {
+        out(y);
+        if (D > 0) {
+            y = y + 1;
+            D = D - dx;
+        }
+        D = D + dy;
+    }
+}
+
+// are coordinates already scaled?
+void bresenham_checkerboard(int size, const std::array<int, 4>& rect, double scale)
+{
+    auto [left, top, right, bottom] = rect;
+
+    bresenham_line(top, 0, bottom, static_cast<int>((bottom - top) / (size * scale)), [&, _right = right, _left = left](int rc) {
+        bresenham_line(_left, 0, _right, static_cast<int>((_right - _left) / (size * scale)), [&](int cc) {
+            cout << (((rc + cc) & 1) ? "*" : " ");
+        });
+        cout << endl;
+    });
+
+}
+
+int main() {
+    bresenham_checkerboard(4, { 0, 0, 100, 100 }, 1.3);
+}
+
+#endif
+
+#if 0
+
+#define BOOST_THREAD_PROVIDES_EXECUTORS 1
+
+#include <iostream>
+#include <boost/thread.hpp>
+#include <boost/thread/concurrent_queues/queue_op_status.hpp>
+#include <boost/thread/future.hpp>
+#include <boost/thread/executors/inline_executor.hpp>
+#include <boost/optional.hpp>
+
+using namespace std;
+using boost::future;
+using boost::promise;
+using boost::optional;
+using boost::make_ready_future;
+
+template <class T>
+struct channel {
+    optional<promise<optional<T>>>    _receive_promise;
+    optional<promise<bool>>           _send_promise;
+
+    future<bool> send(T x) {
+        auto result = _send_promise.get_future();
+
+        if (_receive_promise) {
+            auto tmp = std::move(_receive_promise.get());
+            _receive_promise.reset();
+            tmp.set_value(move(x));
+        } else {
+            _receive_promise = promise<optional<T>>();
+            _receive_promise.set_value(move(x));
+        }
+
+        return result;
+    }
+
+    future<optional<T>> receive() {
+        _receive_waiting = !_send_waiting;
+        auto result = _receive_promise.get_future();
+
+        if (_send_waiting) {
+            auto tmp = std::move(_send_promise);
+            _send_promise = promise<bool>();
+            _send_waiting = false;
+            tmp.set_value(false);
+        } else {
+            _send_promise = promise<bool>();
+            _send_promise.set_value(false);
+        }
+
+        return result;
+    }
+
+    void done_send() {
+        if (_receive_waiting) {
+            auto tmp = std::move(_receive_promise);
+            _receive_promise = promise<optional<T>>();
+            _receive_waiting = false;
+            tmp.set_value(optional<T>());
+        } else {
+            _receive_promise = promise<optional<T>>();
+            _receive_promise.set_value(optional<T>());
+        }
+    }
+
+    void done_receive() {
+        if (_send_waiting) {
+            auto tmp = std::move(_send_promise);
+            _send_promise = promise<bool>();
+            _send_waiting = false;
+            tmp.set_value(true);
+        } else {
+            _send_promise = promise<bool>();
+            _send_promise.set_value(true);
+        }
+    }
+};
+
+struct iota {
+    boost::inline_executor immediate;
+
+    int _f, _l;
+    channel<int>& _out;
+
+    iota(int f, int l, channel<int>& out) : _f(f), _l(l), _out(out) {
+        co_while();
+    }
+
+    void co_while() {
+        if (_f == _l) { done(); return; }
+
+        _out.send(_f).then(immediate, [this](auto stop){
+            if (stop.get()) return;
+            ++_f;
+            co_while();
+        });
+    }
+
+    void done() {
+        _out.done_send();
+    }
+
+};
+
+int main() {
+    boost::inline_executor immediate;
+
+    channel<int> channel;
+
+    iota generator(5, 42, channel);
+
+    while (auto n = channel.receive().get()) {
+        cout << *n << endl;
+    }
+
+
+
+}
+
+#endif
+
+#if 0
+
+#include <adobe/copy_on_write.hpp>
+
+#include <iostream>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) {
+        cout << "annotate assign" << endl;
+        return *this;
+    }
+    annotate& operator=(annotate&&) noexcept {
+        cout << "annotate move-assign" << endl;
+        return *this;
+    }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+using namespace adobe;
+
+int main() {
+    copy_on_write<annotate> x;
+    copy_on_write<annotate> y = x;
+    copy_on_write<annotate> z;
+
+    copy_on_write<annotate> a = std::move(z);
+    z = x;
+    a = std::move(z);
+    z = annotate();
+
+    copy_on_write<pair<int, int>> b(10, 20);
+
+    x.write() = annotate();
+}
+
+#endif
+
+#if 0
+#include <tuple>
+#include <utility>
+
+namespace stlab {
+namespace detail {
+
+template <typename T, typename Tuple, size_t... S>
+void scope_call(Tuple&& t, std::index_sequence<S...>) {
+    T scoped(std::forward<std::tuple_element_t<S, Tuple>>(std::get<S>(t))...);
+
+    // call the function
+    constexpr size_t last_index = std::tuple_size<Tuple>::value - 1;
+    std::forward<std::tuple_element_t<last_index, Tuple>>(std::get<last_index>(t))();
+}
+
+} // namespace detail
+
+template <typename T, typename... Args>
+inline void scope(Args&&... args) {
+    detail::scope_call<T>(std::forward_as_tuple(std::forward<Args>(args)...),
+                             std::make_index_sequence<sizeof...(args) - 1>());
+}
+
+} // namespace stlab
+
+// Example:
+
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+
+using namespace std;
+using namespace stlab;
+
+std::mutex m;
+
+using lock_t = std::lock_guard<std::mutex>;
+
+void noscope() {
+    lock_t l(m);
+    std::cout << "Hello, World!\n";
+}
+
+void scoped() {
+    scope<lock_t>(m, [&]() { std::cout << "Hello, World!\n"; });
+}
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) {
+        cout << "annotate assign" << endl;
+        return *this;
+    }
+    annotate& operator=(annotate&&) noexcept {
+        cout << "annotate move-assign" << endl;
+        return *this;
+    }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+unique_ptr<string> _sink;
+
+struct rvalue_invoke {
+    unique_ptr<string> _s = make_unique<string>("For alcohol!");
+
+    void operator()() && {
+        cout << "Last call!" << endl;
+        _sink = move(_s);
+    }
+};
+
+int main(int argc, const char* argv[]) {
+    auto t1{std::thread(&noscope)};
+    auto t2{std::thread(&scoped)};
+
+    t1.join();
+    t2.join();
+
+    auto x = "message"s;
+
+    scope<annotate>(annotate{}, [&] {
+        cout << x << endl;
+    });
+
+    scope<annotate>(rvalue_invoke{});
+    cout << *_sink << endl;
+}
+
+#endif
+
+#if 0
+#include <string>
+#include <memory>
+#include <iostream>
+#include <type_traits>
+
+#include <boost/signals2.hpp>
+
+using namespace std;
+using namespace boost::signals2;
+
+template <class T>
+class test {
+public:
+void member() {
+    cout << "Called" << endl;
+
+
+
+
+}
+};
+
+int main() {
+
+  using signal_t = signal<void()>;
+  signal_t signal;
+
+  auto obj = make_shared<string>("Hello World!");
+  auto obj2 = make_shared<string>(" Got it!");
+
+  boost::signals2::connection connect = signal.connect(
+      signal_t::slot_type([ _obj = obj.get(), _obj2 = obj2.get() ] {
+        cout << *_obj << *_obj2 << endl;
+      })
+          .track_foreign(obj)
+          .track_foreign(obj2));
+
+  signal.connect([] { cout << "not tracked" << endl; });
+
+  cout << "connected: " << connect.connected() << endl;
+  signal();
+
+  obj.reset();
+
+  cout << "connected: " << connect.connected() << endl;
+  signal();
+
+  cout << "Done" << endl;
+}
+#endif
+
+#if 0
+
+#include <iostream>
+#include <type_traits>
+
+using namespace std;
+
+template <class T>
+auto calc(T x) -> enable_if_t<is_floating_point<T>::value, T>
+{
+    return x * x;
+}
+
+struct test {
+    test() { }
+    test(const test&) { cout << "copy" << endl; }
+    test(test&&) { cout << "move" << endl; }
+    test& operator=(test) { cout << "assign" << endl; return *this; }
+};
+
+auto  f(test x) { return x; }
+
+int main() {
+    calc(25.4);
+    calc(10);
+
+
+    test x = test();
+    test y = f(std::move(x));
+}
+
+#endif
+
+
+
+
+
+
+
+
+
+#if 0
+#include <string>
+#include <iostream>
+
+#include <boost/signals2.hpp>
+
+
+#include <memory>
+#include <type_traits>
+#include <initializer_list>
+
+namespace photoshop {
+
+template <class T>
+class enable_connection;
+
+template <class T>
+class connection {
+    std::weak_ptr<T*> _p;
+
+    friend class enable_connection<T>;
+    connection(const std::shared_ptr<T*> x) : _p(x) { }
+
+  public:
+    constexpr connection() = default;
+    connection(const connection&) = default;
+    connection(connection&&) noexcept = default;
+
+    ~connection() = default;
+
+    connection& operator=(const connection&) = default;
+    connection& operator=(connection&&) noexcept = default;
+
+    void reset() { _p.reset(); }
+    void swap(connection& x) { _p.swap(x._p); }
+
+    long use_count() const { return _p.use_count(); }
+    bool expired() const { return _p.expired(); }
+
+    // Result of lock() is non-owning
+    T* lock() const { if (auto p = _p.lock()) return *p; else return nullptr; }
+
+    bool owner_before( const connection& x) const { return _p.owner_before(x._p); }
+
+    friend inline void swap(connection& x, connection& y) { x.swap(y); }
+};
+
+template <class T>
+class enable_connection {
+    std::shared_ptr<T*> _p;
+public:
+    constexpr enable_connection() = default;
+    // copying / moving severs relationships
+    enable_connection(const enable_connection&) { }
+    enable_connection(enable_connection&& x) noexcept { x._p.reset(); }
+
+    ~enable_connection() = default;
+
+    enable_connection& operator=(const enable_connection&)
+        { _p.reset(); return *this; }
+    enable_connection& operator=(enable_connection&& x) noexcept
+        { _p.reset(); x._p.reset(); return *this; }
+
+    connection<T> connection() {
+        static_assert(std::is_base_of<enable_connection<T>, T>::value,
+                "T must be derive from enable_connection<T>");
+
+        if (!_p) _p = std::make_shared<T*>(static_cast<T*>(this));
+        return photoshop::connection<T>(_p);
+    }
+};
+
+} // namespace photoshop
+
+namespace apollo {
+
+namespace detail {
+
+template <class T>
+auto test_lock(decltype(sizeof(std::declval<T>().lock()))) -> std::true_type;
+
+template <class>
+auto test_lock(...) -> std::false_type;
+
+template <class T>
+constexpr bool has_lock = decltype(test_lock<T>(0))::value;
+
+template <class T, bool = has_lock<T>>
+struct lock;
+
+template <class T>
+struct lock<T, true>
+{
+    using lock_type = decltype(std::declval<T>().lock());
+    mutable lock_type _p;
+
+    explicit lock(T& x) : _p(x.lock()) { }
+    lock_type& value(bool& expired) const { if (!_p) expired = true; return _p; }
+};
+
+template <class T>
+struct lock<T, false>
+{
+    T& _x;
+
+    explicit lock(T& x) : _x(x) { }
+    T& value(bool&) const { return _x; }
+};
+
+} // namespace detail
+
+template <class... ArgsF>
+auto rinvoke(ArgsF&&... argsf) {
+    std::get<sizeof...(ArgsF) - 1>(std::forward_as_tuple(std::forward<ArgsF>(argsf)...));
+}
+
+
+template <class F, class... Args>
+auto package(F&& f, Args&&... args) {
+    return std::bind([_f = std::forward<F>(f)](auto&... args){
+        bool expired = false;
+        return [&_f, &expired](auto&... argss){
+            if (expired) return;
+            return _f(std::move(argss)...); // can I do move or deref?
+        }(detail::lock<decltype(args)>(args).value(expired)...);
+    }, std::forward<Args>(args)...);
+}
+
+} // namespace apollo
+
+
+
+using namespace std;
+using namespace boost::signals2;
+
+struct track : photoshop::enable_connection<track> {
+};
+
+struct test : std::enable_shared_from_this<test> {
+};
+
+class example {
+    string _member;
+public:
+    auto do_it() {
+        return [_member = _member]{ cout << _member << endl; };
+    }
+};
+
+/*
+a*/
+template <class F, class... Args>
+auto package(F&& f, Args&&... args) {
+    return bind([_f = forward<f>](auto&... args){
+        return _f(move(args)...);
+    }, forward<Args>(args)...);
+}
+
+template <class... Args, class F>
+auto _invoke(Args&&... args, F&& f) {
+    cout << "_invoke" << endl;
+}
+
+int main() {
+    _invoke(0);
+    _invoke(0, 1);
+
+    {
+    auto x = make_shared<int>(10);
+    auto y = make_shared<int>(42);
+
+    apollo::package([](auto x, auto a, auto y){
+        cout << "x: " << *x << endl;
+        cout << "a: " << a << endl;
+        cout << "y: " << *y << endl;
+    }, weak_ptr<int>(x), 12, weak_ptr<int>(y))();
+    }
+
+
+    string x;
+    auto fn = [&_s = x]{ _s += "Hello!"; };
+    fn();
+    cout << x << endl;
+
+    auto f5 = [](const char* x) -> string { return x; }; // conver to string
+
+
+    auto f = [](auto... args) { (void)initializer_list<int>{((cout << args << endl), 0)...}; };
+    f(10);
+    f("Hello", 52);
+    f(12.4, "World", 32);;
+
+    auto f2 = [f](auto... args) { return [args..., f]() mutable { f(std::move(args)...); }; };
+    auto f3 = f2(12.4, "World", 32);
+    f3();
+
+    photoshop::connection<track> weak;
+
+    {
+    track t;
+    weak = t.connection();
+    if (weak.lock()) cout << "good" << endl;
+    }
+    if (!weak.lock()) cout << "lost it!" << endl;
+
+
+    signal<void(const string&)> sig;
+    auto connect = sig.connect([](const string& x){ cout << x << endl; });
+    sig("not blocked");
+    {
+    auto blocker = shared_connection_block(connect);
+    sig("blocked");
+    }
+    sig("not blocked again");
+
+}
+#endif
+
+#if 0
+template <class F>
+auto memo(F f) {
+    return [_cache = std::unordered_map<any_hashable>()](auto... args) mutable {
+    };
+}
+#endif
+
+#if 0
+#include <iostream>
+
+#include <boost/icl/interval_set.hpp>
+
+using namespace boost;
+using namespace icl;
+using namespace std;
+
+int main() {
+    interval_set<double> x(interval<double>::right_open(0.0, 10.0));
+    x.insert(22.3);
+
+    cout << x << endl;
+    
+
+}
+
+#endif
+
+
+#if 0
+
+#include <chrono>
+#include <iostream>
+#include <thread>
+
+using namespace std;
+using namespace chrono;
+
+constexpr size_t amount = 1024 * 5;
+
+__attribute__ ((noinline)) void time(const char* a, char* b) {
+    for (int n = 0; n != 1000; ++n) {
+        std::copy(a, a + amount, b);
+    }
+    #if 0
+    for (int n = 0; n != 1000; ++n) {
+        auto p = operator new(1050);
+        operator delete(p);
+    }
+    #endif
+}
+__attribute__ ((noinline)) void test(const char* a, char* b) {
+    auto start = high_resolution_clock::now();
+    time(a, b);
+    cout << duration_cast<nanoseconds>(high_resolution_clock::now()-start).count() << endl;
+}
+
+int main() {
+    char a[amount] = { 0 };
+    char b[amount];
+
+    test(a, b);
+}
+
+#endif
+
+
+#if 0
+
+#include <map>
+#include <string>
+#include <iostream>
+#include <vector>
+
+using namespace std;
+
+int main() {
+    map<string, string> map = {
+        { "key", "value" },
+        { "Hello", "World!" }
+    };
+
+    // C++11 & 14
+    for (const auto& key_value : map) {
+        cout << key_value.first << endl;
+    }
+
+    // C++17 structured bindings
+    for (const auto& [key, value] : map) {
+        cout << key << endl;
+    }
+}
+
+#endif
+
+#if 0
+#include <type_traits>
+
+struct X {
+    X(const X&);
+    X& operator=(X) noexcept;
+};
+
+struct Y {
+    X x;
+};
+
+int main() {
+    static_assert(std::is_nothrow_move_assignable<Y>{}, "");
+}
+
+#endif
+
+
+#if 0
+
+#include <interval_set.hpp>
+#include <iostream>
+#include <adobe/enum_ops.hpp>
+#include <type_traits>
+#include <map>
+#include <tuple>
+
+namespace apollo {
+
+template <typename T>
+class collection {
+public:
+    enum class index_type : std::size_t { };
+
+    using set_type = interval_set<index_type>;
+
+    void move(const set_type&, index_type);
+    void copy(const set_type&, index_type);
+    void insert(const set_type&, index_type);
+    void erase(const set_type&);
+
+    // connection_type = connect(index_type, index_type, source_type, function<void(const set_type&)>);
+private:
+    friend auto stlab_enable_arithmetic_enum(index_type) -> std::true_type;
+};
+
+} // namespace apollo
+
+using namespace apollo;
+using namespace std;
+
+int main() {
+    auto a = collection<int>::index_type();
+    ++a;
+
+
+    interval_set<int> x = { 0, 500 };
+    x -= { 50, 100 };
+    x |= { 55, 60, 70, 90 };
+    x.flip();
+
+    auto r = x.equal_range(0, 1000, 65);
+    cout << "[" << r.first << ", " << r.second << ")" << endl;
+
+    x.for_each_segment(0, 1000, [](auto x, auto y){ cout << "[" << x << ", " << y << ") "; });
+    cout << endl;
+}
+
+
+
+#endif
+
+
+
+#if 0
+#include <region.hpp>
+
+#include <iostream>
+
+#if 0
+namespace apollo {
+
+template <typename T>
+class collection {
+    void move(region, position);
+    void copy(region, position);
+    void insert(range, position);
+    void erase(region);
+
+    void connect_move(region, position);
+    void connect_copy(region, position);
+    void connect_insert(range, position);
+    void connect_erase(region);
+};
+
+} // namespace apollo
+#endif
+#include <cassert>
+using namespace apollo;
+using namespace std;
+
+int main()
+{
+#if 0
+    int xa = 10;
+    int xb = 43;
+
+//    tie(xa, xb) = { xb, xa };
+
+    tuple<int&, int&> ac(xa, xb);
+    tuple<int, int> ad;
+
+    ad = { 3, 4 };
+
+    cout << xa << " " << xb << endl;
+#endif
+
+    totally_ordered_set<double> d = { 0.0 }; // all values 0...
+    assert(d[-0.0]);
+    assert(!d[-1.0]);
+
+    int a[] = { 3, 8, 12, 14 }; // 00011111000011000...
+    int b[] = { 0, 6, 11 };     // 11111100000111111...
+
+    region_operation(false, begin(a), end(a),
+                     false, begin(b), end(b),
+                     less<>(), logical_and<bool>(), ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+    region_operation(false, begin(a), end(a),
+                     false, begin(b), end(b),
+                     less<>(), logical_or<bool>(), ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+    region_operation(false, begin(a), end(a),
+                     false, begin(b), end(b),
+                     less<>(), [](bool x, bool y) { return x && !y; }, ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+    auto p = totally_ordered_set<int>::from_sorted_values({ 1, 2, 3, 5, 6, 42 });
+    p.for_each_segment(0, 50, [](auto x, auto y){ cout << "[" << x << ", " << y << ") "; });
+    cout << endl;
+
+
+    totally_ordered_set<int> x = { 3, 8, 12, 14 };
+    totally_ordered_set<int> y = { 0, 6, 11 };
+    cout << "--- around 5 ---" << endl;
+    cout << "[" << x.lower_bound(0, 5) << ", " << x.upper_bound(5, 15) << ")" << endl;
+    cout << "--- next range ---" << endl;
+    cout << "[" << x.upper_bound(5, 15) << ", " << x.upper_bound(x.upper_bound(5, 15), 15) << ")" << endl;
+    {
+    int a; int b;
+    std::tie(a, b) = x.equal_range(0, 15, 5);
+    auto c = x.equal_range(0, 15, 5);
+    cout << "[" << c.first << ", " << c.second << ")" << endl;
+    cout << "[" << a << ", " << b << ")" << endl;
+    }
+
+    cout << "--- and ---" << endl;
+    totally_ordered_set<int> z = x & y;
+    z.for_each_segment(0, 15, [](auto x, auto y){ cout << "[" << x << ", " << y << ") "; });
+    cout << endl;
+
+    cout << "--- or ---" << endl;
+    totally_ordered_set<int> or_ = x | y;
+    or_.for_each_segment(0, 15, [](auto x, auto y){ cout << "[" << x << ", " << y << ") "; });
+    cout << endl;
+
+    cout << "--- index ---" << endl;
+    cout << x[2] << endl;
+    cout << x[5] << endl;
+    cout << x[6] << endl;
+
+    
+    cout << "--- subtraction ---" << endl;
+    totally_ordered_set<int> sub_ = x - y;
+    sub_.for_each_segment(0, 15, [](auto x, auto y){ cout << "[" << x << ", " << y << ") "; });
+    cout << endl;
+
+    cout << "--- compliment ---" << endl;
+    x = ~x;
+    x.for_each_segment(0, 15, [](auto x, auto y){ cout << "[" << x << ", " << y << ") "; });
+}
+#endif
+
+
+
+
+#if 0
+
+/**************************************************************************************************/
+
+// library code
+
+#include <type_traits>
+
+auto stlab_enable_bitmask_enum(...) -> std::false_type;
+
+namespace stlab {
+namespace detail {
+
+template <class T>
+constexpr bool is_enabled_bitmask = decltype(stlab_enable_bitmask_enum(std::declval<T>()))::value;
+
+} // namespace detail
+} // namespace stlab
+
+
+// declared in global space - stlab_enable_bitmask_enum called unqualified and relies on ADL
+
+template <class T>
+constexpr auto operator|(T lhs,T rhs) ->
+    std::enable_if_t<stlab::detail::is_enabled_bitmask<T>, T>
+{
+    using underlying = std::underlying_type_t<T>;
+    return static_cast<T>(static_cast<underlying>(lhs) | static_cast<underlying>(rhs));
+}
+
+/**************************************************************************************************/
+
+// photoshop code
+
+// #include <adobe/enum_ops.hpp>
+
+namespace photoshop {
+
+enum class view {
+  none = 0, text = 1 << 0, icon = 1 << 1
+};
+
+// enable bitmask ops without jumping out of namespace!
+auto stlab_enable_bitmask_enum(view) -> std::true_type;
+
+} // namespace photoshop
+
+
+/**************************************************************************************************/
+
+// usage (using namespace photoshop here is fine, but ommited to test
+
+#include <iostream>
+
+using namespace std;
+
+int main() {
+    photoshop::view v = photoshop::view::text | photoshop::view::icon; // typesafe!
+
+    cout << static_cast<underlying_type_t<decltype(v)>>(v) << endl;
+}
+
+/**************************************************************************************************/
+
+#endif
+
+#if 0
+#include <cassert>
+#include <iostream>
+#include <iterator>
+
+using namespace std;
+
+template <class Out>
+void recursive(int f, int l, int n, Out out) {
+    if (n == 0) return;
+    if (n & 1) {
+        f += (l - f) / n;
+        --n;
+        *out++ = f;
+    }
+    auto m = f + (l - f) / 2;
+
+    recursive(f, m, n / 2, out);
+    recursive(m, l, n / 2, out);
+}
+
+template <class Out>
+void iterative(int f, int l, unsigned n, Out out) {
+    while (n != 0) {
+        f += (l - f) / n;
+        --n;
+        *out++ = f;
+    }
+    assert((n == 0) || (f == l));
+}
+
+#include <cmath>
+#include <cstdint>
+
+int main() {
+    int exp = 0;
+    double m = frexp(16.4, &exp);
+    m = ldexp(m, 53);
+
+    cout << "matissa:" << int64_t(trunc(m)) << " exponent:" << exp << endl;
+
+    iterative(0, 5, 10, ostream_iterator<int>(cout, " "));
+    cout << endl;
+    recursive(0, 5, 10, ostream_iterator<int>(cout, " "));
+    cout << endl;
+}
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+
+using namespace std;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+struct foo_t {
+    annotate _v;
+
+    annotate move() { return std::move(_v); }
+};
+
+int main() {
+    foo_t x;
+    auto b = x.move();
+}
+
+#endif
+
+
+#if 0
+
+#include <queue>
+#include <iostream>
+
+using namespace std;
+
+template <std::size_t n>
+struct compare_element {
+    template <class T>
+    bool operator()(const T& x, const T& y) { return get<n>(x) < get<n>(y); }
+};
+
+int main() {
+    using type = pair<int, int>;
+    priority_queue<type, vector<type>, compare_element<0>> q;
+
+    q.push({ 3, 2 });
+    q.push({ 6, 5 });
+    q.push({ 5, 4 });
+    q.push({ 4, 3 });
+    q.push({ 2, 1 });
+    q.push({ 1, 0 });
+
+    while (!q.empty()) {
+        cout << q.top().second << endl;
+        q.pop();
+    }
+
+
+}
+
+#endif
+#if 0
+
+// -- From USheet.h --
+
+enum SheetKind {
+	kAnySheet = 0,
+	kPixelSheet,
+	kAdjustmentSheet,
+	kTextSheet,
+    //...
+};
+
+// -- apollo/layer.hpp --
+
+// #include "USheet..h" // header blead-through...
+
+#include <type_traits>
+
+namespace apollo {
+
+enum class layer_kind : std::underlying_type_t<SheetKind> {
+    any = kAnySheet,
+    pixel = kPixelSheet,
+    adjustment = kAdjustmentSheet,
+    text = kTextSheet,
+    //...
+};
+
+} // namespace apollo
+
+// -- example usage --
+
+#include <iostream>
+
+using namespace apollo;
+using namespace std;
+
+
+int main() {
+    SheetKind x = static_cast<SheetKind>(layer_kind::any);
+    cout << x << endl;
+}
+
+#endif
+
+#if 0
+
+#include <cstddef>
+#include <type_traits>
+#include <cassert>
+
+/*
+    An enum class will not implicitly convert to an int. We can declare one with an underlying
+    type (std::size_t in this case). This creates a strongly typed integer, but without any
+    operations.
+    
+    We provide an initial value, none, which is used to specify that this work_id doesn't refer
+    to a work item.
+*/
+
+enum class work_id : std::size_t { none = 0 };
+
+/*
+    Inside our progress code, we need a way to increment a work_id counter. We can do this by
+    adding an increment function (might as well make it an operator) and casting to the
+    underlying type (in this case, std::size_t, but we will use a trait so we don't have to
+    hard code it).
+    
+    If you need other operations like hashing you can add them in a similar fashion.
+*/
+
+inline work_id& operator++(work_id& x) {
+    return x = static_cast<work_id>(static_cast<std::underlying_type_t<work_id>>(x) + 1);
+}
+
+/*
+
+    Now we can use it like an integral type, which can only be incremented and compared for
+    equality.
+*/
+
+int main() {
+    work_id x = work_id::none;
+    work_id y = work_id::none;
+
+    assert(x == y);
+    ++x;
+    assert(x != y);
+    assert(x > y);
+    ++y;
+    assert(x == y);
+
+    /*
+    These line would all generate a compiler error.
+
+    x++;
+    --x;
+    x + 1;
+    int z = x;
+
+    */
+}
+
+
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <functional>
+#include <tuple>
+#include <string>
+#include <cmath>
+
+class point {
+  public:
+    double width;
+    double height;
+    double distance() const { return std::sqrt(width * height); }
+};
+
+class global_space : public point { };
+class view_local : public point { };
+
+//#include <boost/fusion/functional/invocation/invoke.hpp>
+#include <boost/fusion/functional/invocation.hpp>
+
+#include <experimental/tuple>
+
+using namespace std;
+using namespace boost;
+using namespace boost::fusion;
+
+using namespace std::experimental;
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+ostream& operator<<(ostream& out, const annotate&) { out << "annotate print"; return out; }
+
+
+class some_class {
+
+    annotate _member;
+
+public:
+    #if 1
+    void get(annotate& out) const { out = _member; }
+    #elif 0
+    string get() const { return _member; }
+    #elif 0
+    const annotate& get() const&  { return _member; }
+    annotate get() &&  { return std::move(_member); }
+    #endif
+};
+
+annotate append(annotate x) {
+    return x;
+}
+
+class other_class {
+
+    annotate _member;
+
+public:
+    #if 1
+    explicit other_class(const annotate& x) : _member(x) { }
+    #elif 0
+    explicit other_class(annotate x) : _member(std::move(x)) { }
+    #elif 0
+    explicit other_class(const annotate& x) : _member(x) { }
+    explicit other_class(annotate&& x) : _member(std::move(x)) { }
+    #elif 0
+    template <class T>
+    explicit other_class(T&& x) : _member(std::forward<T>(x)) { }
+    #endif
+};
+
+struct test_case {
+using string = annotate;
+
+#if 0
+string get() const { return annotate(); }
+#elif 1
+string get() const {
+	string result;
+	return result;
+}
+#endif
+
+
+};
+
+template <class T, class F>
+void apply_if(const std::weak_ptr<T>& p, F f) {
+    auto _p = p.lock();
+    if (!p) return;
+    f(*p);
+}
+
+
+void root_extension(const string& in, string& root, string& ext) {
+	auto p = in.find_last_of('.');
+	if (p == string::npos) p = in.size();
+	root = in.substr(0, p);
+	ext = in.substr(p, in.size() - p);
+}
+string append(string sink) { sink += "appended data"; return sink; }
+
+auto root_extension(const string& in) {
+	auto p = in.find_last_of('.');
+	if (p == string::npos) p = in.size();
+	return make_pair(in.substr(0, p), in.substr(p, in.size() - p));
+}
+
+
+int main() {
+    cout << global_space().distance() << endl;
+
+    cout << apply([](string root, const string& ext){
+        return move(root) + "-copy" + ext;
+    }, root_extension("path/file.jpg")) << endl;
+
+    cout << "-----" << endl;
+    apply([](annotate root, const annotate& ext) {
+        return root;
+    }, make_pair(annotate(), annotate()));
+    cout << "-----" << endl;
+
+    string root;
+    string ext;
+    root_extension("path/file.jpg", root, ext);
+    cout << root << " - " << ext << endl;
+
+    root_extension("path/file", root, ext);
+    cout << root << " - " << ext << endl;
+
+    
+    tie(root, ext) = root_extension("path/file.jpg");
+    cout << root << " - " << ext << endl;
+
+    string x = "Hello world";
+    x = append(std::move(x));
+
+    cout << x << endl;
+
+    {
+    test_case test;
+    test.get();
+    }
+
+    #if 0
+    some_class obj;
+
+    annotate s;
+    obj.get(s);
+    other_class x(s);
+
+    #elif 0
+    other_class x(some_class().get());
+    #elif 0
+    auto x = append(annotate());
+    #endif
+
+    // cout << obj.get() << endl;
+
+}
+
+#endif
+
+#if 0
+#include <type_traits>
+
+enum class test {
+    a, b
+};
+
+enum class test2 {
+    c, d
+};
+
+
+
+
+int main() {
+    test2 x = test::a;
+}
+
+#endif
+
+
+#if 0
+#include <region.hpp>
+
+#include <iostream>
+
+using namespace apollo;
+using namespace std;
+
+
+int main()
+{
+#if 0
+    int xa = 10;
+    int xb = 43;
+
+//    tie(xa, xb) = { xb, xa };
+
+    tuple<int&, int&> ac(xa, xb);
+    tuple<int, int> ad;
+
+    ad = { 3, 4 };
+
+    cout << xa << " " << xb << endl;
+#endif
+
+    int a[] = { 3, 8, 12, 14 }; // 00011111000011000...
+    int b[] = { 0, 6, 11 };     // 11111100000111111...
+
+    region_operation(false, begin(a), end(a),
+                     false, begin(b), end(b),
+                     logical_and<bool>(), ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+    region_operation(false, begin(a), end(a),
+                     false, begin(b), end(b),
+                     logical_or<bool>(), ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+    region_operation(false, begin(a), end(a),
+                     false, begin(b), end(b),
+                     [](bool x, bool y) { return x && !y; }, ostream_iterator<int>(cout, " "));
+    cout << endl;
+
+
+    region x = { 0, 5, 9 };
+    region y = { 3, 5, 9, 11 };
+
+    region z = x & y;
+    z([](size_t x){ cout << x << endl; }, 15);
+
+    cout << "--- or ---" << endl;
+    region or_ = x | y;
+    or_([](size_t x){ cout << x << endl; }, 15);
+
+    cout << "--- index ---" << endl;
+    cout << x[2] << endl;
+    cout << x[5] << endl;
+    cout << x[6] << endl;
+
+    
+    cout << "--- subtraction ---" << endl;
+    region sub_ = x - y;
+    sub_([](size_t x){ cout << x << endl; }, 15);
+
+    cout << "--- compliment ---" << endl;
+    x = ~x;
+    cout << x[2] << endl;
+    cout << x[6] << endl;
+}
+
+#endif
+
+#if 0
+
+
+
+
 #include <algorithm>
 #include <iostream>
 #include <string>
@@ -39,7 +1557,7 @@ int main() {
     wcout << str << endl;
 }
 
-
+#endif
 
 
 #if 0
@@ -76,9 +1594,40 @@ int main() {
 #include <future>
 #include <memory>
 
+#include <boost/thread/future.hpp>
+
 #include <dispatch/dispatch.h>
 
+
+
+#include <iostream>
+#include <chrono>
+
+using namespace std;
+using namespace std::chrono;
+
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
+    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+
 namespace stlab {
+
+template <class T, class F>
+void apply_weak(F f, const std::weak_ptr<T>& p) {
+    auto _p = p.lock();
+    if (!_p) return;
+    f(*_p);
+}
 
 template <class Sig, class F>
 auto cancelable_task(F&& f) {
@@ -88,40 +1637,36 @@ auto cancelable_task(F&& f) {
     auto r = p->get_future();
 
     return std::make_pair([_p = std::weak_ptr<shared_t>(p)] (auto&&... args) {
-        auto p = _p.lock();
-        if (!p) return;
-        (*p)(std::forward<decltype(args)>(args)...);
+        if (auto p = _p.lock()) (*p)(std::forward<decltype(args)>(args)...);
     },
     std::async(std::launch::deferred, [_p = std::move(p), _r = std::move(r)] () mutable {
         return _r.get();
     }));
 }
 
+#if 0
 template <class T>
-    struct shared_type {
-        T _task;
-        std::atomic_flag _flag = ATOMIC_FLAG_INIT;
+struct shared_type {
+    T _task;
+    std::atomic_flag _flag = ATOMIC_FLAG_INIT;
 
-        template <class U>
-        explicit shared_type(U&& x) : _task(std::forward<U>(x)) { }
-    };
+    template <class U>
+    explicit shared_type(U&& x) : _task(std::forward<U>(x)) { }
+};
+#endif
 
+#if 0
 template <class F, class... Args>
 auto promotable_task(F&& f, Args&&... args) {
     using result_t = std::result_of_t<std::decay_t<F>(std::decay_t<Args>...)>;
     using packaged_t = std::packaged_task<result_t()>;
 
-    using shared_t = shared_type<packaged_t>;
-
-
-#if 0
     struct shared_t {
         packaged_t _task;
         std::atomic_flag _flag = ATOMIC_FLAG_INIT;
 
         explicit shared_t(packaged_t&& x) : _task(std::move(x)) { }
     };
-#endif
 
     auto p = std::make_shared<shared_t>(std::bind([_f = std::forward<F>(f)](Args&... args) {
         return _f(std::move(args)...);
@@ -131,13 +1676,34 @@ auto promotable_task(F&& f, Args&&... args) {
 
     return std::make_pair([_p = std::weak_ptr<shared_t>(p)] () {
         auto p = _p.lock();
-        if (!p || p->_flag.test_and_set()) return;
-        p->_task();
+        if (p && !p->_flag.test_and_set()) p->_task();
     },
     std::async(std::launch::deferred, [_p = std::move(p), _r = std::move(r)] () mutable {
         if (!_p->_flag.test_and_set()) _p->_task();
         return _r.get();
     }));
+}
+#endif
+
+template <class F, class... Args>
+auto promotable_task(F&& f, Args&&... args) {
+    using result_t = std::result_of_t<std::decay_t<F>(std::decay_t<Args>...)>;
+    using packaged_t = boost::packaged_task<result_t()>;
+
+    struct callback {
+        annotate _member;
+        using result_type = void;
+        void operator()(packaged_t& task) const {
+            try { task(); }
+            catch(boost::task_already_started&) { }
+        }
+    };
+
+    packaged_t task(std::forward<F>(f), std::forward<Args>(args)...);
+    task.set_wait_callback(callback());
+    auto future = task.get_future();
+
+    return std::make_pair(std::move(task), std::move(future));
 }
 
 template <class Function, class... Args>
@@ -160,23 +1726,51 @@ auto async(Function&& f, Args&&... args )
 
 } // namespace stlab
 
-#include <iostream>
 
-using namespace std;
+#if 1
 
-struct annotate {
-    annotate() { cout << "annotate ctor" << endl; }
-    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
-    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
-    annotate& operator=(const annotate&) { cout << "annotate assign" << endl; return *this; }
-    annotate& operator=(annotate&&) noexcept { cout << "annotate move-assign" << endl; return *this; }
-    ~annotate() { cout << "annotate dtor" << endl; }
-    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
-    friend inline bool operator==(const annotate&, const annotate&) { return true; }
-    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
-};
+using namespace stlab;
 
 int main() {
+    if (auto x = 0) {
+    } else {
+        cout << x << endl;
+    }
+
+#if 0
+    auto task_future = cancelable_task<int(int)>([](int x){
+        cout << "called: " << x << endl;
+        return x;
+    });
+#endif
+    auto task_future = promotable_task([]{
+        cout << "called: " << endl;
+        return 10;
+    });
+
+    task_future.second = boost::future<int>(); // cancel
+
+    task_future.first(); // invoke the task
+
+    // cout << "result: " << task_future.second.get() << endl; // display result
+}
+
+#else
+int main() {
+
+    {
+    auto x = std::async(std::launch::deferred, []{ cout << "called" << endl; });
+    x.wait_for(1s);
+    x.wait();
+    }
+
+    cout << "begin" << endl;
+    {
+    auto a = bind([](auto& x){ }, annotate());
+    // auto x = packaged_task<void()>(bind([](auto& x){ }, annotate()));
+    }
+    cout << "end" << endl;
+
     {
     cout << "test 1" << endl;
     auto task_future = stlab::cancelable_task<unique_ptr<int>(unique_ptr<int>)>([](unique_ptr<int> x) {
@@ -255,6 +1849,7 @@ int main() {
     }
 
 }
+#endif
 
 #endif
 
@@ -657,8 +2252,10 @@ int factorial(int n) {
 #include <memory>
 #include <mutex>
 #include <future>
+#define BOOST_THREAD_PROVIDES_EXECUTORS 1
 #include <boost/optional.hpp>
 #include <boost/thread/future.hpp>
+#include <boost/thread/concurrent_queues/queue_op_status.hpp>
 
 namespace stlab {
 
@@ -700,41 +2297,52 @@ struct shared_receiver {
 
 template <class T>
 struct shared_channel final : shared_sender<T>, shared_receiver<T> {
+    using receive_promise_t = boost::optional<boost::promise<boost::optional<T>>>;
+    using send_promise_t = boost::optional<boost::promise<void>>;
+
     process _process;
 
     std::mutex _mutex;
     std::deque<T> _q;
     bool _closed = false;
     std::size_t _buffer_size = 1;
-    boost::optional<boost::promise<boost::optional<T>>> _receive_promise;
-    boost::optional<boost::promise<void>> _send_promise;
+    receive_promise_t _receive_promise;
+    send_promise_t _send_promise;
 
     /*
-        REVISIT : No flow control. Send should return a future<void> which is auto resolved
-        if there is space in the queue, otherwise it isn't resolved until there is space.
+        REVISIT : Make this a future<bool> to support cancelation of non-process senders?
     */
 
     boost::future<void> send(T x) override {
-        std::lock_guard<std::mutex> lock(_mutex);
-        // REVISIT : set_value() under the lock might deadlock if immediate continuation?
-        if (_q.empty() && _receive_promise) {
-            _receive_promise->set_value(std::move(x));
-            _receive_promise.reset();
-            return boost::make_ready_future();
+        receive_promise_t promise;
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if (_q.empty() && _receive_promise) {
+                promise = std::move(_receive_promise);
+                _receive_promise.reset();
+            } else {
+                _q.emplace_back(std::move(x));
+                if (_q.size() == _buffer_size) {
+                    _send_promise = boost::promise<void>();
+                    return _send_promise.get().get_future();
+                }
+            }
         }
-        _q.emplace_back(std::move(x));
-        if (_q.size() == _buffer_size) {
-            _send_promise = boost::promise<void>();
-            return _send_promise.get().get_future();
-        }
+        if (promise) promise->set_value(std::move(x));
         return boost::make_ready_future();
     }
 
     void close() override {
-        std::lock_guard<std::mutex> lock(_mutex);
-        // REVISIT : set_value() under the lock might deadlock if immediate continuation?
-        if (_q.empty() && _receive_promise) _receive_promise.get().set_value(boost::optional<T>());
-        else _closed = true;
+        receive_promise_t promise;
+        {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if (_q.empty() && _receive_promise) {
+                promise = std::move(_receive_promise);
+                _receive_promise.reset();
+            }
+            else _closed = true;
+        }
+        if (promise) promise->set_value(boost::optional<T>());
     }
 
     void set_process(process p) override {
@@ -744,23 +2352,25 @@ struct shared_channel final : shared_sender<T>, shared_receiver<T> {
     }
 
     boost::future<boost::optional<T>> receive() override {
+        send_promise_t promise;
+        boost::future<boost::optional<T>> result;
         {
-        std::lock_guard<std::mutex> lock(_mutex);
-        if (!_q.empty()) {
-            auto result = boost::make_ready_future<boost::optional<T>>(std::move(_q.front()));
-            _q.pop_front();
-            if (_send_promise) {
-                _send_promise->set_value();
+            std::lock_guard<std::mutex> lock(_mutex);
+            if (!_q.empty()) {
+                result = boost::make_ready_future<boost::optional<T>>(std::move(_q.front()));
+                _q.pop_front();
+                promise = std::move(_send_promise);
                 _send_promise.reset();
+            } else if (_closed) {
+                return boost::make_ready_future<boost::optional<T>>();
+            } else {
+                _receive_promise = boost::promise<boost::optional<T>>();
+                return _receive_promise.get().get_future();
             }
-            return result;
         }
-        if (_closed) {
-            return boost::make_ready_future<boost::optional<T>>();
-        }
-        _receive_promise = boost::promise<boost::optional<T>>();
-        return _receive_promise.get().get_future();
-        }
+        // !_q.empty()
+        if (promise) promise->set_value();
+        return result;
     }
 };
 
@@ -780,15 +2390,17 @@ class sender {
   public:
     sender() = default;
 
+    /*
+        REVISIT (sparent) : Should a sender be copyable or only movable? If only movable should
+        it close on destruction?
+    */
+
     boost::future<void> operator()(T x) const {
-        auto p = _p.lock();
-        if (!p) return boost::make_ready_future();
-        return p->send(std::move(x));
+        if (auto p = _p.lock()) return p->send(std::move(x));
+        return boost::make_ready_future();
     }
     void close() const {
-        auto p = _p.lock();
-        if (!p) return;
-        p->close();
+        if (auto p = _p.lock()) p->close();
     }
 
     /*
@@ -796,9 +2408,7 @@ class sender {
         Is there a better way?
     */
     void set_process(process x) const {
-        auto p = _p.lock();
-        if (!p) return;
-        p->set_process(std::move(x));
+        if (auto p = _p.lock()) p->set_process(std::move(x));
     }
 };
 
@@ -843,18 +2453,20 @@ struct mul2 {
 
     void run() {
         _receive().then([this](auto x){
-            auto opt = x.get();
-            if (!opt) _send.close();
-            _receive().then([this, _x = *opt](auto y){
-                auto opt = y.get();
-                if (!opt) _send(_x).then([this](auto){ _send.close(); });
-                else _send(_x * *opt).then([this](auto){ run(); });
-            });
+            if (auto opt = x.get()) {
+                _receive().then([this, _x = *opt](auto y){
+                    if (auto opt = y.get()) _send(_x * *opt).then([this](auto){ run(); });
+                    else _send(_x).then([this](auto){ _send.close(); });
+                });
+            } else _send.close();
         });
     }
 };
 
+#include <boost/thread/executors/inline_executor.hpp>
+
 struct iota {
+    boost::inline_executor immediate;
     stlab::sender<int> _send;
 
     int _min;
@@ -871,7 +2483,7 @@ struct iota {
             _send.close();
             return;
         }
-        _send(_min).then([this](auto){
+        _send(_min).then(immediate, [this](auto){
             ++_min;
             run();
         });
@@ -892,15 +2504,14 @@ struct sum {
 
     void run() {
         _receive().then([this](auto x){
-            auto opt = x.get();
-            if (!opt) {
+            if (auto opt = x.get()) {
+                _result += *opt;
+                run(); // continue
+            } else {
                 _send(_result).then([this](auto){
                     _send.close();
                 });
-                return;
             }
-            _result += *opt;
-            run(); // continue
         });
     }
 };
@@ -920,9 +2531,8 @@ struct map<F, R(A)> {
 
     void run() {
         _receive().then([this](auto x){
-            auto opt = x.get();
-            if (!opt) _send.close();
-            else _send(_f(*opt)).then([this](auto){ run(); });
+            if (auto opt = x.get()) _send(_f(*opt)).then([this](auto){ run(); });
+            else _send.close();
         });
     }
 };
@@ -940,6 +2550,9 @@ int main() {
 
     send1.set_process(stlab::make_process<iota>(send1, 0, 10));
 
+    while (auto n = receive1().get()) {
+        std::cout << *n << std::endl;
+    }
     
     stlab::sender<int> send2;
     stlab::receiver<int> receive2;
