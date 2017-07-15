@@ -4,14 +4,15 @@
     APOLLO_ASSERT(exp) is yet-another-assert-macro that works like standard assert() except
     if you are using the clang static analyzer (Analyze in Xcode), in which case the analyzer
     will warn if the assert macro can be triggered.
-    
+
     Note that normally assert() can be used to let the analyzer know that a condition cannot
     happen to silence false positives. It does this by assuming that if the condition is met, the
-    assertion does not return and that this is expected behavior.
-    
+    assertion does not return and that this is expected behavior. Although this does quiet false
+   positives, it has the negative effect of also masking legitimate issues.
+
     Where that behavior is desirable, assert() should be used with an appropriate comment, or use
     one of the clang attributes. <https://clang-analyzer.llvm.org/faq.html>
-    
+
     In order for the static analyzer to report assert violation you need to add the following
     to the Xcode compiler flags:
 
@@ -35,14 +36,7 @@ double arccos(double x) {
     return x;
 }
 
-int main() {
-    return arccos(42.0);
-}
-
-
-
-
-
+int main() { return arccos(42.0); }
 
 
 
