@@ -1,3 +1,2194 @@
+#include <functional>
+#include <cassert>
+
+#include <AssertMacros.h>
+
+
+class some_type {
+   std::function<int(int)> _f;
+public:
+#if 0
+  template <class F> // F is int(int)
+  some_type(F&& f) : _f(std::forward<F>(f)) { }
+#else
+    some_type(std::function<int(int)> f) : _f(std::move(f)) { }
+#endif
+};
+
+int main() {
+    __Verify(false);
+
+    int x = 5;
+    some_type foo{[_x = x](int a){ return a + _x; }};
+}
+
+#if 0
+#include <iostream>
+#include <memory>
+#include <functional>
+
+void operation(bool a, bool b) {
+    b = a || b; // a implies b
+    //...
+}
+
+template <class>
+class task;
+
+template <class R, class... Args>
+class task<R(Args...)> {
+    struct concept {
+        virtual ~concept() = default;
+        virtual R invoke(Args&&...) = 0;
+    };
+    
+    template <class F>
+    struct model final : concept {
+        template <class G>
+        model(G&& f) : _f(std::forward<G>(f)) {}
+        R invoke(Args&&... args) override { return std::invoke(_f, std::forward<Args>(args)...); }
+        
+        F _f;
+    };
+    
+    std::unique_ptr<concept> _p;
+    
+public:
+    template <class F>
+    task(F&& f) : _p(std::make_unique<model<F>>(std::forward<F>(f))) { }
+
+    R operator()(Args... args) { return _p->invoke(std::forward<Args>(args)...); }
+};
+
+
+#if 0
+
+template <class R, class... Args>
+class task<R(Args...)> {
+    struct concept {
+        virtual ~concept() = default;
+        virtual void move(void*) noexcept = 0;
+        virtual R invoke(Args&&...) = 0;
+    };
+    
+    template <class, bool>
+    struct model;
+    
+    template <class F>
+    struct model<F, true> final : concept {
+        model(F f) : _f(std::move(f)) {}
+        void move(void* p) noexcept override { new (p) model(std::move(*this)); }
+        R invoke(Args&&... args) override { return _f(std::forward<Args>(args)...); }
+        
+        F _f;
+    };
+    
+    template <class F>
+    struct model<F, false> final : concept {
+        model(F f) : _f(std::make_unique<F>(std::move(f))) {}
+        void move(void* p) noexcept override { new (p) model(std::move(*this)); }
+        R invoke(Args&&... args) override { return (*_f)(std::forward<Args>(args)...); }
+        
+        std::unique_ptr<F> _f;
+    };
+    
+    std::aligned_storage_t<sizeof(void*) * 3> _data;
+    concept& self() { return *static_cast<concept*>(static_cast<void*>(&_data)); }
+    
+public:
+    template <class F>
+    task(F f) {
+        new (&_data) model<F, sizeof(model<F, true>) <= sizeof(_data)>(std::move(f));
+    }
+    ~task() { self().~concept(); }
+    
+    task(task&& f) { f.self().move(&_data); }
+    task& operator=(task&& f) noexcept {
+        this->~task();
+        f.self().move(&_data);
+        return *this;
+    }
+    
+    R operator()(Args... args) { return self().invoke(std::forward<Args>(args)...); }
+};
+
+#endif
+
+int main() {
+    task<int()> t = [_p = std::make_unique<int>(42)]() mutable { return *_p; };
+    auto u = std::move(t);
+    t = std::move(u);
+    std::cout << std::move(t)() << std::endl;
+}
+
+#endif
+
+#if 0
+
+#include <functional>
+#include <iostream>
+#include <string>
+#include <memory>
+
+#include <experimental/optional>
+
+/*
+*/
+
+template <class T>
+class maybe {
+    std::aligned_storage_t<sizeof(T)> _value;
+    bool _has_value = false;
+
+public:
+    maybe() = default;
+
+    template <class U>
+    static auto unit(U&& x) {
+        return maybe<std::decay_t<U>>(std::forward<U>(x));
+    }
+
+    template <class... Args>
+    maybe(Args&&... args) {
+        new (&_value) T(args...);
+        _has_value = true;
+    }
+
+    maybe(const maybe& mx) {
+        mx | [&](auto x) {
+            new (&_value) T(x);
+            _has_value = true;
+        };
+    }
+
+    maybe(maybe&& mx) noexcept {
+        mx | [&](auto& x) {
+            new (&_value) T(std::move(x));
+            _has_value = true;
+        };
+    }
+
+    template <class G>
+    friend auto operator|(const maybe& m, G&& g) {
+        if (m._has_value)
+            return std::forward<G>(g)(*static_cast<const T*>(static_cast<const void*>(&m._value)));
+        return std::result_of_t<std::decay_t<G>(T)>();
+    }
+
+    template <class G>
+    friend auto operator|(maybe&& m, G&& g) {
+        if (m._has_value)
+            return std::forward<G>(g)(std::move(*static_cast<T*>(static_cast<void*>(&m._value))));
+        return std::result_of_t<std::decay_t<G>(T)>();
+    }
+
+    const T& join() const noexcept {
+        if (_has_value) return *static_cast<const T*>(static_cast<const void*>(&_value));
+        else return T();
+    }
+};
+
+template <class F, class M>
+auto fmap(F&& f, M&& m) {
+    return m | [&](auto&& x) {
+        return std::decay_t<M>::unit(std::forward<F>(f)(std::forward<decltype(x)>(x)));
+    };
+}
+
+template <class M>
+auto join(M&& m) {
+    return m | [](auto&& x) { return x; };
+}
+
+/*
+
+Given a functor, f, piped to a lambda, g of the form R(Args...)
+ If the value of f is a tuple, it is expanded into Args...
+ If R is a functor it is returned directly
+ Otherwise fmap(l) is returned
+
+
+shared_ptr acts as a maybe functor
+
+*/
+
+template <class T>
+inline constexpr bool is_functor = false;
+
+template <class T>
+inline constexpr bool is_functor<std::shared_ptr<T>> = true;
+
+template <class G, class T>
+using pipe_result = std::result_of_t<std::decay_t<G>(typename T::value_type)>;
+
+template <class T, class G>
+auto operator|(const T& f, G&& g) -> std::enable_if_t<is_functor<T>, pipe_result<G, T>> {
+}
+
+template <class T, class G>
+auto operator|(const std::shared_ptr<T>& m, G&& g) {
+    using result_t = maybe<std::result_of_t<std::decay_t<G>(T)>>;
+    if (m) return result_t(std::forward<G>(g)(*m));
+    return result_t();
+}
+
+template <class T>
+class future {
+    struct shared {
+        std::mutex _mutex;
+        maybe<T> _value;
+    };
+    std::shared_ptr<shared> _shared;
+    template <class> friend class promise;
+
+    future(std::shared_ptr<shared> p) : _shared(std::move(p)) { }
+public:
+    // pure
+    // join
+    template <class F>
+    friend auto fmap(const future& m, F&& f) {
+        return m._shared | [](shared& s){
+            std::unique_lock<std::mutex> _lock(s._mutex);
+            return s._value;
+        } | f;
+    }
+
+    template <class G>
+    friend auto operator|(future&& m, G&& g) {
+        if (m._has_value)
+            return std::forward<G>(g)(std::move(*static_cast<T*>(static_cast<void*>(&m._value))));
+        return std::result_of_t<std::decay_t<G>(T)>();
+    }
+};
+
+template <class T>
+class promise {
+    using shared_t = typename future<T>::shared;
+    std::weak_ptr<shared_t> _shared;
+public:
+    future<T> get_future() {
+        auto p = std::make_shared<shared_t>();
+        _shared = p;
+        return future<T>(std::move(p));
+    }
+
+};
+
+maybe<int> operator+(const maybe<int>& mx, const maybe<int>& my) {
+    return mx | [&](int x) { return my | [&](int y) { return maybe<int>(x + y); }; };
+}
+
+
+int main() {
+    using namespace std::string_literals;
+
+    maybe<int> x = 10;
+    maybe<int> y = 20;
+
+    fmap([](int x) { return (x == 10) ? "success"s : "fail"s; }, x) |
+        [](const std::string& r) { std::cout << r << std::endl; };
+
+    (x + y) | [](int r) { std::cout << r << std::endl; };
+
+    //std::cout << join(x + x + y) << std::endl;
+}
+
+#endif
+
+#if 0
+#include <cassert>
+
+unsigned mul_v0(unsigned a, unsigned b) {
+    return (a * b + 127) / 255;
+}
+
+unsigned mul_v1(unsigned a, unsigned b) {
+
+    return ((a * b + 127) * (1 << 16) / 255) >> 16;
+}
+
+unsigned long mul_bad(unsigned long a, unsigned long b) {
+
+    return ((a * b + 128) * ((1 << 16) / 255)) >> 16;
+}
+
+unsigned mul_v2(unsigned a, unsigned b) {
+    auto tmp = a * b + 128;
+    return (tmp + (tmp >> 8)) >> 8;
+}
+
+int main() {
+    for (unsigned a = 0; a <= 255; ++a) {
+        for (unsigned b = 0; b <= 255; ++b) {
+            assert(mul_v0(a, b) == mul_bad(a, b));
+            assert(mul_v0(a, b) == mul_v1(a, b));
+            assert(mul_v0(a, b) == mul_v2(a, b));
+        }
+    }
+}
+
+#endif
+
+#if 0
+
+#include <utility>
+#include <iostream>
+
+namespace asl {
+
+struct registry_key {
+    friend void swap(registry_key& x, registry_key& y) {
+        using namespace std;
+        swap(x._m, y._m);
+    }
+
+private:
+    int* _m;
+};
+
+} // namespace asl
+
+#ifdef defined(__has_include)
+#if __has_include(<filesystem>)
+
+#endif
+#endif
+
+int main() {
+    std::cout << __has_include(<filesystem>) << std::endl;
+    asl::registry_key x, y;
+    swap(x, y);
+}
+
+#endif
+
+#if 0
+
+#include <climits>
+#include <limits>
+
+namespace adobe {
+
+template <class T>
+constexpr int bits = CHAR_BIT * sizeof(T);
+
+#if 0
+template <class T, std::size_t N>
+constexpr T mask_n = (N == bits<T>) ?
+                         ~T(0) :
+                         ((N == (std::numeric_limits<T>::digits)) ? std::numeric_limits<T>::max() :
+                                                                    T((T(1) << N) - 1));
+#endif
+template <class T, std::size_t N>
+constexpr T mask_n
+
+template <class T, std::size_t F, std::size_t L>
+constexpr T mask_range = mask_n<T, L> & ~mask_n<T, F>;
+
+template <class T>
+constexpr T mask_lower = (T(1) << (bits<T> / 2)) - 1;
+
+template <class T>
+constexpr T mask_upper = ~mask_lower<T>;
+
+template <class T>
+constexpr T lower(T a) {
+    return a & mask_lower<T>;
+}
+
+template <class T>
+constexpr T upper(T a) {
+    // Use division instead of shifting a possibly negative value which is UBH
+    return lower((a & mask_upper<T>) / (T(1) << (bits<T> / 2)));
+}
+
+/*
+Can just use make_unsigned, do the multiply and cast back?
+*/
+
+template <class T>
+constexpr T multiply_lower(T x, T y) {
+/*
+     VC++ 2017.1 warns on integral constant overflow for unsigned values (Warning C4307). The
+     warning cannot be silenced locally, it would need to be silenced each place this function is
+     invoked. A bug has been filed with Microsoft <https://jira.corp.adobe.com/browse/PCT-4197455>.
+     The test here will auto enable on the next release of the VC++ compiler, at which point
+     the issue can be revisited.
+*/
+
+#if !(defined(_MSC_VER) && (_MSC_VER <= 1910))
+    if constexpr (std::is_unsigned_v<T>) {
+        return x * y;
+    } else
+#endif
+    {
+        T x0 = lower(x);
+        T y0 = lower(y);
+        T c = x0 * y0;
+        return (lower(upper(c) + lower(upper(x) * y0) + lower(x0 * upper(y))) << (bits<T> / 2)) |
+               lower(c);
+    }
+}
+
+} // namespace adobe
+
+#include <cstdint>
+#include <cassert>
+#include <ios>
+#include <iostream>
+
+template <class T>
+constexpr T max_value = std::numeric_limits<T>::max();
+template <class T>
+constexpr T min_value = std::numeric_limits<T>::min();
+
+using namespace std;
+
+int main() {
+    cout << hex << adobe::mask_range<int32_t, 8, 30> << endl;
+
+    using type = int16_t;
+
+    for (type a = min_value<type>; a != max_value<type>; ++a ) {
+        for (type b = min_value<type>; b != max_value<type>; ++b) {
+            auto r1 = type(a * b);
+            auto r2 = adobe::multiply_lower(a, b);
+            if (r1 != r2) {
+                cout << "a = " << hex << static_cast<std::size_t>(a) << endl;
+                cout << "b = " << hex << static_cast<std::size_t>(b) << endl;
+                cout << "r1 = " << hex << static_cast<std::size_t>(r1) << endl;
+                cout << "r2 = " << hex << static_cast<std::size_t>(r2) << endl;
+            }
+        }
+    }
+}
+
+#endif
+
+#if 0
+
+#include <cmath>
+using namespace std;
+
+
+int main() {
+    auto x = fabs(-2.5);
+}
+#endif
+#if 0
+
+#include <memory>
+#include <cstddef>
+#include <exception>
+
+namespace std {
+inline namespace adobe_cpp {
+
+class bad_optional_access : public std::exception {
+public:
+    const char* what() const noexcept override {
+        return "bad_optional_access";
+    }
+};
+
+struct nullopt_t {
+    explicit constexpr nullopt_t(int) {}
+};
+
+inline constexpr nullopt_t nullopt{0};
+
+template <class T>
+class optional {
+    std::aligned_storage_t<sizeof(T)> _data;
+    bool _has_value = false;
+
+    constexpr T& _value() & { return *static_cast<T*>(static_cast<void*>(&_data)); }
+    void _destory() noexcept { if (_has_value) _value().~T(); }
+
+public:
+    using value_type = T;
+    constexpr optional() noexcept = default;
+    constexpr optional(std::nullopt_t) noexcept : optional() { }
+    constexpr optional(const optional& other) {
+        if (other._has_value) {
+            new (&_data) T(other);
+            _has_value = true;
+        }
+    }
+    constexpr optional(optional&& other) noexcept {
+        if (other._has_value) {
+            new (&_data) T(std::move(other));
+            _has_value = true;
+        }
+    }
+    template <class U>
+    /* EXPLICIT */ optional(const optional<U>& other) {
+        if (other._has_value) {
+            new (&_data) T(other);
+            _has_value = true;
+        }
+    }
+    template <class U>
+    /* EXPLICIT */ optional(optional<U>&& other) {
+        if (other._has_value) {
+            new (&_data) T(std::move(other));
+            _has_value = true;
+        }
+    }
+    template <class... Args>
+    constexpr explicit optional(std::in_place_t, Args&&... args) {
+        new (&_data) T(std::forward<Args>(args)...);
+        _has_value = true;
+    }
+    template <class U, class... Args>
+    constexpr explicit optional(std::in_place_t, std::initializer_list<U> ilist, Args&&... args) {
+        new (&_data) T(ilist, std::forward<Args>(args)...);
+        _has_value = true;
+    }
+    template <class U = value_type>
+    /* EXPLICIT */ constexpr optional(U&& value) {
+        new (&_data) T(std::forward<U>(value));
+        _has_value = true;
+    }
+
+    ~optional() { _destroy(); }
+
+    optional& operator=(std::nullopt_t) noexcept {
+        _destroy();
+        _has_value = false;
+        return *this;
+    }
+    optional& operator=(const optional& other) {
+        if (_has_value && other._has_value)
+            _value() = other._value();
+        else if (_has_value) {
+            _value().~T();
+            _has_value = false;
+        } else if (other._has_value) {
+            new (&_data) T(other);
+            _has_value = true;
+        }
+        return *this;
+    }
+
+    optional& operator=(optional&& other) noexcept(std::is_nothrow_move_assignable<T>::value
+                                                && std::is_nothrow_move_constructible<T>::value) {
+        if (_has_value && other._has_value)
+            _value() = std::move(other._value());
+        else if (_has_value) {
+            _value().~T();
+            _has_value = false;
+        } else if (other._has_value) {
+            new (&_data) T(std::move(other._value()));
+            _has_value = true;
+        }
+        return *this;
+    }
+
+    template <class U = value_type>
+    optional& operator=(U&& value) {
+        if (_has_value) _value() = std::forward<U>(value);
+        else { new (&_data) T(std::forward<U>(value)); _has_value = true; }
+        return *this;
+    }
+    template <class U>
+    optional& operator=(const optional<U>& other) {
+        if (_has_value && other._has_value)
+            _value() = other._value();
+        else if (_has_value) {
+            _value().~T();
+            _has_value = false;
+        } else if (other._has_value) {
+            new (&_data) T(other);
+            _has_value = true;
+        }
+        return *this;
+    }
+    template <class U>
+    optional& operator=(optional<U>&& other) {
+        if (_has_value && other._has_value)
+            _value() = std::move(other._value());
+        else if (_has_value) {
+            _value().~T();
+            _has_value = false;
+        } else if (other._has_value) {
+            new (&_data) T(std::move(other._value()));
+            _has_value = true;
+        }
+        return *this;
+    }
+
+    constexpr const T* operator->() const { return &_value(); }
+    constexpr T* operator->() { return &_value(); }
+    constexpr const T& operator*() const & { return _value(); }
+    constexpr T& operator*() & { return _value(); }
+    constexpr const T&& operator*() const && { return _value(); }
+    constexpr T&& operator*() && { return _value(); }
+
+    constexpr explicit operator bool() const noexcept { return _has_value; }
+    constexpr bool has_value() const noexcept { return _has_value; }
+
+    constexpr T& value() &;
+    constexpr const T& value() const &;
+    constexpr T&& value() &&;
+    constexpr const T&& value() const &&;
+
+    template <class U>
+    constexpr T value_or(U&& default_value) const &;
+    template <class U>
+    constexpr T value_or(U&& default_value) &&;
+
+};
+
+} // inline namespace adobe_cpp
+} // namespace std
+
+
+int main() {
+    std::optional<int> x = 10;
+}
+
+#endif
+
+#if 0
+
+#include <cstdint>
+#include <iostream>
+#include <locale>
+#include <tuple>
+
+using namespace std;
+
+template <class T>
+class destructible : public T {
+public:
+    template <class... Args>
+    destructible(Args&&... args) : T(std::forward<Args>(args)...) { }
+    ~destructible() = default;
+};
+
+template <class I, class O>
+auto copy_bounded(I f1, I l1, O f2, O l2) {
+    while (f1 != l1 && f2 != l2) {
+        *f2 = *f1;
+        ++f1;
+        ++f2;
+    }
+    return std::make_pair(f1, f2);
+}
+
+template <class I, class O>
+auto copy_utf(I f, I l, O out) {
+    destructible<std::codecvt<char16_t, char, std::mbstate_t>> converter;
+    std::mbstate_t mbstate{0};
+    char16_t    in_buffer[1024];
+    char        out_buffer[1024];
+
+    auto f1 = std::cbegin(in_buffer);
+    auto f2 = std::begin(out_buffer);
+
+    while (f != l) {
+        const char16_t* l1;
+        std::tie(f, l1) = copy_bounded(f, l, std::begin(in_buffer), std::end(in_buffer));
+        std::codecvt_base::result result = std::codecvt_base::ok;
+        while (true) {
+            result = converter.out(mbstate, f1, l1, f1, f2, std::end(out_buffer), f2);
+            std::copy(std::begin(out_buffer), f2, out);
+            if (result != std::codecvt_base::partial) break;
+            f2 = std::begin(out_buffer);
+        }
+        if (result != std::codecvt_base::ok) break;
+    }
+    return out;
+}
+
+int main() {
+    std::string out;
+    std::u16string in = u"Hello world!";
+    copy_utf(std::begin(in), std::end(in), std::back_inserter(out));
+
+    std::cout << out << std::endl;
+}
+
+#endif
+
+#if 0
+
+#include <vector>
+#include <functional>
+
+class connection {
+};
+
+template <class Sig>
+class signal {
+    struct slot {
+        connection          _connection;
+        std::function<Sig>  _function;
+    };
+
+    std::vector<slot> _slots;
+public:
+    template <class F>
+    [[ nodiscard ]] connection connect(F&& f);
+
+    template <class... Args>
+    void send(connection source, Args&&... args) {
+    }
+};
+
+int main() {
+}
+
+#endif
+
+
+
+
+#if 0
+#include <array>
+#include <functional>
+#include <tuple>
+
+/**************************************************************************************************/
+
+namespace stlab {
+
+/**************************************************************************************************/
+
+namespace detail {
+
+template <class F, class Tuple, std::size_t... I>
+constexpr decltype(auto) apply_impl(F&& f, Tuple&& t, std::index_sequence<I...>) {
+    return std::invoke(std::forward<F>(f), std::get<I>(std::forward<Tuple>(t))...);
+}
+} // namespace detail
+
+/**************************************************************************************************/
+
+template <class Seq, class F, class Tuple>
+constexpr decltype(auto) apply_indexed(F&& f, Tuple&& t) {
+    return detail::apply_impl(std::forward<F>(f), std::forward<Tuple>(t), Seq());
+}
+
+/**************************************************************************************************/
+
+template <class Seq1, class Seq2>
+struct index_sequence_cat;
+
+template <std::size_t... N1, std::size_t... N2>
+struct index_sequence_cat<std::index_sequence<N1...>, std::index_sequence<N2...>> {
+    using type = std::index_sequence<N1..., N2...>;
+};
+
+template <class Seq1, class Seq2>
+using index_sequence_cat_t = typename index_sequence_cat<Seq1, Seq2>::type;
+
+/**************************************************************************************************/
+
+template <class T, std::size_t N1, std::size_t N2, std::size_t... N1s, std::size_t... N2s>
+constexpr auto concat_impl(const std::array<T, N1>& a,
+                           const std::array<T, N2>& b,
+                           std::index_sequence<N1s...>,
+                           std::index_sequence<N2s...>) {
+    return std::array<T, N1 + N2>{{a[N1s]..., b[N2s]...}};
+}
+
+template <class T, std::size_t N1, std::size_t N2>
+constexpr auto concat(const std::array<T, N1>& a, const std::array<T, N2>& b) {
+    return concat_impl(a, b, std::make_index_sequence<N1>(), std::make_index_sequence<N2>());
+}
+
+/**************************************************************************************************/
+
+template <class Seq>
+struct index_sequence_to_array;
+
+template <std::size_t... N>
+struct index_sequence_to_array<std::index_sequence<N...>> {
+    static constexpr std::array<std::size_t, sizeof...(N)> value{N...};
+};
+
+/**************************************************************************************************/
+
+template <std::size_t N, std::size_t... Ns>
+constexpr std::size_t get(std::index_sequence<Ns...>) {
+    constexpr std::array<std::size_t, sizeof...(Ns)> result{Ns...};
+    return result[N];
+}
+
+/**************************************************************************************************/
+
+template <class Seq, template <std::size_t> class F, std::size_t Index, std::size_t Count>
+struct index_sequence_transform;
+
+template <class Seq,
+          template <std::size_t> class F,
+          std::size_t Index = 0,
+          std::size_t Count = Seq::size()>
+using index_sequence_transform_t = typename index_sequence_transform<Seq, F, Index, Count>::type;
+
+template <class Seq, template <std::size_t> class F, std::size_t Index, std::size_t Count>
+struct index_sequence_transform {
+    using type = index_sequence_cat_t<
+        index_sequence_transform_t<Seq, F, Index, Count / 2>,
+        index_sequence_transform_t<Seq, F, Index + Count / 2, Count - Count / 2>>;
+};
+
+template <class Seq, template <std::size_t> class F, std::size_t Index>
+struct index_sequence_transform<Seq, F, Index, 0> {
+    using type = std::index_sequence<>;
+};
+
+template <class Seq, template <std::size_t> class F, std::size_t Index>
+struct index_sequence_transform<Seq, F, Index, 1> {
+    using type = typename F<get<Index>(Seq())>::type;
+};
+
+/**************************************************************************************************/
+
+template <template <std::size_t> class F, std::size_t I, std::size_t N, class T, std::size_t N1>
+constexpr auto transform(const std::array<T, N1>& a) {
+    if constexpr (I == 0) return std::array<T, 0>{{}};
+    if constexpr (I == 1) return std::array<T, 1>{{F<I>::result()}};
+    return concat(transform<F, I, N>(a), transform<F, I, N>(a));
+}
+
+/**************************************************************************************************/
+
+template <std::size_t... Ns>
+constexpr auto make_array(std::index_sequence<Ns...>) {
+    return std::array<std::size_t, sizeof...(Ns)>{{Ns...}};
+}
+
+
+/**************************************************************************************************/
+
+template <const std::size_t* P, class Seq>
+struct array_to_index_sequence;
+
+template <const std::size_t* P, std::size_t... Ns>
+struct array_to_index_sequence<P, std::index_sequence<Ns...>> {
+    using type = std::index_sequence<P[Ns]...>;
+};
+
+template <const std::size_t* P, std::size_t N>
+using make_index_sequence = typename array_to_index_sequence<P, std::make_index_sequence<N>>::type;
+
+/**************************************************************************************************/
+
+class placeholder {};
+
+template <class T, std::size_t N>
+struct map_placeholder {
+    using type = std::index_sequence<N>;
+};
+
+template <std::size_t N>
+struct map_placeholder<placeholder, N> {
+    using type = std::index_sequence<>;
+};
+
+template <class Tuple>
+struct remove_placeholder {
+    template <std::size_t Index>
+    struct function {
+        using type = typename map_placeholder<std::tuple_element_t<Index, Tuple>, Index>::type;
+    };
+};
+
+/**************************************************************************************************/
+
+template <class Tuple>
+struct remove_placeholder_ {
+    template <std::size_t Index>
+    struct function {
+        static constexpr auto result() {
+            if constexpr (std::is_same<std::tuple_element_t<Index, Tuple>, placeholder>::value) {
+                return std::array<std::size_t, 0>{{}};
+            }
+            return std::array<std::size_t, 1>{{Index}};
+        }
+    };
+};
+
+/**************************************************************************************************/
+
+template <class F, class... Args>
+void for_each_argument(F f, Args&&... args) {
+    return (void)std::initializer_list<int>{(std::invoke(f, args), 0)...};
+}
+
+/**************************************************************************************************/
+
+} // namespace stlab
+
+/**************************************************************************************************/
+
+#include <iostream>
+
+using namespace std;
+using namespace stlab;
+
+int main() {
+    constexpr array<std::size_t, 3> a { 1, 2, 3 };
+    constexpr array<std::size_t, 3> b { 4, 5, 6 };
+    static constexpr auto c = concat(a, b);
+
+    stlab::make_index_sequence<c.cbegin(), c.size()>;
+
+    auto x = std::make_tuple(10, placeholder(), 25.0, placeholder());
+    apply_indexed<index_sequence_transform_t<std::make_index_sequence<tuple_size<decltype(x)>::value>,
+                                             remove_placeholder<decltype(x)>::function>>(
+        [](auto... args) { for_each_argument([](auto x) { cout << x << endl; }, args...); }, x);
+}
+
+#endif
+#if 0
+
+
+//
+//  main.cpp
+//  playground
+//
+//  Created by Nick DeMarco on 8/11/17.
+//  Copyright ¬© 2017 Nick DeMarco. All rights reserved.
+//
+
+
+#include <array>
+#include <cassert>
+#include <cstdint>
+#include <chrono>
+#include <cmath>
+#include <iostream>
+#include <memory>
+#include <thread>
+#include <type_traits>
+#include <random>
+
+using namespace std;
+
+/**************************************************************************************************/
+
+template <class T, // T models signed integral type
+          class F> // F is a function void(T x, T y)
+void bresenham_line(T x0, T y0, T x1, T y1, F out) {
+    const T dx = x1 - x0;
+    const T dy = y1 - y0;
+
+    T rem = dy - dx;
+
+    for (T x = x0, y = y0; x != x1; ++x) {
+        out(x, y);
+
+        if (rem >= 0) {
+            y = y + 1;
+            rem = rem - dx;
+        }
+        rem = rem + dy;
+    }
+}
+
+/**************************************************************************************************/
+
+template <class T> // T models integral type
+constexpr auto unsigned_difference(T a, T b) {
+    using utype = std::make_unsigned_t<T>;
+
+    if ((a < 0) == (b < 0)) return static_cast<utype>(b - a);
+    return static_cast<utype>(static_cast<utype>(std::abs(a)) + static_cast<utype>(std::abs(b)));
+}
+
+/**************************************************************************************************/
+
+#if 0
+template <class T, // T models integral type
+          class F> // F is a function void(T x, T y)
+void parent_demarco_line(T x0, T y0, T x1, T y1, F out) {
+    using utype = std::make_unsigned_t<T>;
+
+    constexpr auto max = std::numeric_limits<utype>::max();
+    const utype numer = unsigned_difference(y0, y1);
+    const utype denom = unsigned_difference(x0, x1);
+    const utype dy = max / denom * numer + (max % denom * numer + (numer - 1)) / denom;
+
+    utype rem = dy;
+
+    T y = y0;
+
+    for (T x = x0; x != x1; ++x) {
+        out(x, y);
+        assert(((x + 1) != x1) || y == (y1 - 1));
+        rem += dy;       // add
+        y += (rem < dy); // addc
+    }
+}
+#endif
+
+#if 0
+template <class F> // F is a function void(T x, T y)
+void parent_demarco_line(std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1, F out) {
+    const std::uint64_t numer = unsigned_difference(y0, y1);
+    const std::uint64_t denom = unsigned_difference(x0, x1);
+    const std::uint32_t dy = static_cast<uint32_t>(((std::numeric_limits<std::uint32_t>::max() * numer) + (numer - 1)) / denom);
+
+    std::uint32_t rem = dy;
+
+    std::int32_t y = y0;
+
+    for (int32_t x = x0; x != x1; ++x) {
+        out(x, y);
+        assert(((x + 1) != x1) || y == (y1 - 1));
+        rem += dy;       // add
+        y += (rem < dy); // addc
+    }
+}
+#endif
+
+/**************************************************************************************************/
+
+template <class T, // T models integral type
+          class F> // F is a function void(T x, T y)
+void parent_demarco_clip(double slope, T x0, T x1, F out) {
+    static_assert(std::is_unsigned<T>::type, "T must be unsigned.");
+
+    constexpr auto max = std::numeric_limits<T>::max();
+    const T dy = max * slope;
+
+    T rem = dy * y0 + dy;
+    T y = x0 / max;
+
+    for (T x = x0; x != x1; ++x) {
+        out(x, y);
+        rem += dy;       // add
+        y += (rem < dy); // addc
+    }
+}
+
+/**************************************************************************************************/
+
+template <class T, // T models integral type
+          class F> // F is a function void(T)
+void clip(double size, T xStart, T xEnd, F out) {
+    static_assert(std::is_unsigned<T>::value, "clip(...) requires unsigned T.");
+    assert(xStart <= xEnd);
+    size = max(size, 1.0);
+
+    auto dy = static_cast<T>(std::numeric_limits<T>::max() / size);
+
+    auto rem = xStart * dy + dy;
+    auto y = static_cast<T>(xStart / size);
+
+    for (auto x = xStart; x != xEnd; ++x) {
+        out(y);
+        rem += dy;
+        y += (rem < dy);
+    }
+}
+
+void bresenham_checkerboard(int size, const std::array<std::uint32_t, 4>& rect, double scale) {
+    auto[left, top, right, bottom] = rect;
+
+    clip(size * scale, top, bottom, [&, _right = right, _left = left ](int rc) {
+        clip(size * scale, _left, _right, [&](int cc) { cout << (((rc + cc) & 1) ? "*" : " "); });
+        cout << endl;
+    });
+}
+
+int main() {
+
+#if 0
+    std::mt19937 rng;
+    rng.seed(std::random_device()());
+    std::uniform_int_distribution<std::mt19937::result_type> dist6(0, std::numeric_limits<std::int32_t>::max());
+
+    std::cout << dist6(rng) << std::endl;
+#endif
+
+#if 0
+    int32_t x0 = 0, y0 = 0, x1 = 80;
+
+    std::vector<int32_t> v(x1);
+
+    for (int32_t y1 = 0; y1 != x1; ++y1) {
+
+        parent_demarco_line(x0, y0, x1, y1, [&](auto x, auto y) {
+            v[x] = y;
+        });
+        cout << endl;
+        bresenham_line(x0, y0, x1, y1, [&](auto x, auto y) {
+            assert(v[x] == y);
+        });
+        cout << endl;
+    }
+#endif
+
+#if 0
+    int32_t x0 = 0, y0 = 0, x1 = 80;
+    int32_t y1 = 3;
+
+    line_0(x0, y0, x1, y1, [_n = 0, _y = y0](auto x, auto y) mutable {
+        if (_y != y) {
+            _y = y;
+            cout << endl << string(_n, ' ');
+        }
+        cout << '*';
+        ++_n;
+
+    });
+    cout << endl;
+    bresenham_line(x0, y0, x1, y1, [_n = 0, _y = y0](auto x, auto y) mutable {
+        if (_y != y) {
+            _y = y;
+            cout << endl << string(_n, ' ');
+        }
+        cout << '*';
+        ++_n;
+
+    });
+    cout << endl;
+
+#endif
+
+#if 0
+    int16_t x0 = 0, y0 = 0, x1 = 80;
+    for (int16_t y1 = 0; y1 <= x1; ++y1) {
+
+        parent_demarco_line(x0, y0, x1, y1, [_n = 0, _y = y0](auto x, auto y) mutable {
+            if (_y != y) {
+                _y = y;
+                cout << endl << string(_n, ' ');
+            }
+            cout << '*';
+            ++_n;
+
+        });
+        cout << endl;
+    }
+#endif
+
+#if 1
+    int16_t x0 = std::numeric_limits<int16_t>::min(), y0 = std::numeric_limits<int16_t>::min(), x1 = std::numeric_limits<int16_t>::max() - 2;
+    for (int16_t y1 = 0; y1 != x1; ++y1) {
+
+        parent_demarco_line(x0, y0, x1, y1, [](auto x, auto y) { });
+    }
+#endif
+
+#if 0
+    int32_t x0 = 0, y0 = 0, x1 = std::numeric_limits<int32_t>::max();
+    for (int32_t y1 = x1; y1 != 0; --y1) {
+        parent_demarco_line(x0, y0, x1, y1, [](auto x, auto y)  { });
+        cout << endl;
+    }
+#endif
+
+#if 0
+    bresenham_line(x0, y0, x1, y1, [_n = 0, _y = y0](auto x, auto y) mutable {
+        if (_y != y) {
+            _y = y;
+            cout << endl << string(_n, ' ');
+        }
+        cout << '*';
+        ++_n;
+
+    });
+    cout << endl;
+#endif
+
+
+#if 0
+    for (std::uint32_t i = 0; i < 100; i++) {
+        bresenham_checkerboard(4, {i, i, 25 + i, 25 + i}, 1);
+        std::this_thread::sleep_for(std::chrono::duration<double>(0.5));
+    }
+#endif
+}
+
+#endif
+
+
+
+
+
+
+
+
+
+
+#if 0
+template<class InputIt1, class InputIt2, class OutputIt>
+constexpr OutputIt merge(InputIt1 first1, InputIt1 last1,
+               InputIt2 first2, InputIt2 last2,
+               OutputIt d_first)
+{
+    for (; first1 != last1; ++d_first) {
+        if (first2 == last2) {
+            return std::copy(first1, last1, d_first);
+        }
+        if (*first2 < *first1) {
+            *d_first = *first2;
+            ++first2;
+        } else {
+            *d_first = *first1;
+            ++first1;
+        }
+    }
+    return copy(first2, last2, d_first);
+}
+
+
+constexpr auto merge(const std::array<int, 2>& x, const std::array<int 2>& y) -> std::array<int, 4> {
+    std::array<int, 4> result;
+
+    for (; first1 != last1; ++d_first) {
+        if (first2 == last2) {
+            return std::copy(first1, last1, d_first);
+        }
+        if (*first2 < *first1) {
+            *d_first = *first2;
+            ++first2;
+        } else {
+            *d_first = *first1;
+            ++first1;
+        }
+    }
+    return std::copy(first2, last2, d_first);
+}
+#endif
+
+#if 0
+template <class T, std::size_t N>
+constexpr std::array<T, N> sort_array(const std::array<T, N>& x) {
+    if (N == 0 || N == 1) return x;
+    return array_merge();
+}
+#endif
+
+#if 0
+#include <cstddef>
+#include <cstring>
+#include <string>
+
+#include <experimental/string_view>
+#include <boost/utility/string_view.hpp>
+
+namespace apollo {
+
+constexpr auto strlen(const char* str) -> std::size_t {
+    std::size_t result{0};
+    while (*str++)
+        ++result;
+    return result;
+}
+
+constexpr int strncmp(const char* s1, const char* s2, std::size_t n) {
+    for (; n != 0; s1++, s2++, --n)
+        if (*s1 != *s2)
+            return static_cast<unsigned char>(*s1) < static_cast<unsigned char>(*s2) ? -1 : 1;
+        else if (*s1 == '\0')
+            return 0;
+    return 0;
+}
+
+template <class ForwardIt1, class ForwardIt2>
+constexpr ForwardIt1 search(ForwardIt1 first,
+                            ForwardIt1 last,
+                            ForwardIt2 s_first,
+                            ForwardIt2 s_last) {
+    for (;; ++first) {
+        ForwardIt1 it = first;
+        for (ForwardIt2 s_it = s_first;; ++it, ++s_it) {
+            if (s_it == s_last) {
+                return first;
+            }
+            if (it == last) {
+                return last;
+            }
+            if (!(*it == *s_it)) {
+                break;
+            }
+        }
+    }
+}
+
+template <class I, class T>
+constexpr I find(I f, I l, T x) {
+    while (f != l) {
+        if (*f == x) break;
+        ++f;
+    }
+    return f;
+}
+
+inline constexpr std::size_t string_rfind(const char* p, std::size_t sz, char c, std::size_t pos) noexcept {
+    if (sz == 0) return std::numeric_limits<std::size_t>::max();
+    if (pos < sz)
+        ++pos;
+    else
+        pos = sz;
+    for (const char* ps = p + pos; ps != p;) {
+        if (*--ps == c) return static_cast<std::size_t>(ps - p);
+    }
+    return std::numeric_limits<std::size_t>::max();
+}
+
+template <class T>
+constexpr void swap(T& x, T& y) {
+    T t(std::move(x));
+    x = std::move(y);
+    y = std::move(t);
+}
+
+class string_view {
+public:
+    using value_type = char;
+    using pointer = char*;
+    using const_pointer = const char*;
+    using reference = char&;
+    using const_reference = const char&;
+    using const_iterator = const_pointer;
+    using iterator = const_iterator;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+    using reverse_iterator = const_reverse_iterator;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+
+    constexpr string_view() noexcept : _str(nullptr), _size(0) {}
+    constexpr string_view(const char* s) noexcept : _str(s), _size(apollo::strlen(s)) {}
+    constexpr string_view(const string_view&) noexcept = default;
+    constexpr string_view(const char* s, size_type n) : _str(s), _size(n) {}
+
+    constexpr string_view& operator=(const string_view& view) noexcept = default;
+
+    constexpr const_iterator begin() const noexcept { return _str; }
+    constexpr const_iterator cbegin() const noexcept { return begin(); }
+
+    constexpr const_iterator end() const noexcept { return begin() + size(); }
+    constexpr const_iterator cend() const noexcept { return begin() + size(); }
+
+    constexpr const_iterator rbegin() const noexcept { return end(); }
+    constexpr const_iterator crbegin() const noexcept { return end(); }
+
+    constexpr const_iterator rend() const noexcept { return begin(); }
+    constexpr const_iterator crend() const noexcept { return begin(); }
+
+    constexpr const_reference operator[](size_type pos) const { return *(begin() + pos); }
+
+    constexpr const_reference at(size_type pos) const {
+        if (size() < pos) throw std::out_of_range("apollo::string_view::at(pos) out_of_range");
+        return operator[](pos);
+    }
+
+    constexpr const_reference front() const { return *begin(); }
+    constexpr const_reference back() const { return *(end() - 1); }
+    constexpr const_pointer data() const noexcept { return begin(); }
+
+    constexpr size_type max_size() const noexcept {
+        return std::numeric_limits<size_type>::max() - 1;
+    }
+
+    constexpr bool empty() const noexcept { return !size(); }
+
+    constexpr void remove_prefix(size_type n) {
+        _str += n;
+        _size -= n;
+    }
+    constexpr void remove_suffix(size_type n) { _size -= n; }
+
+    constexpr void swap(string_view& v) noexcept {
+        apollo::swap(_str, v._str);
+        apollo::swap(_size, v._size);
+    }
+
+    constexpr size_type size() const noexcept { return _size; }
+    constexpr size_type length() const noexcept { return size(); }
+
+    size_type copy(char* dest, size_type count, size_type pos = 0) const {
+        count = std::min(count, size() - pos);
+        std::copy(begin() + pos, begin() + pos + count, dest);
+        return count;
+    }
+
+    static constexpr size_type npos = size_type(std::numeric_limits<size_type>::max());
+
+    constexpr string_view substr(size_type pos = 0, size_type count = npos) const {
+        if (size() < pos) throw std::out_of_range("apollo::string_view::substr(pos) out_of_range");
+        return string_view(begin() + pos, std::min(count, size() - pos));
+    }
+
+    constexpr int compare(string_view v) const noexcept {
+        return strncmp(data(), v.data(), std::min(size(), v.size()));
+    }
+
+    constexpr int compare(size_type pos1, size_type count1, string_view v) const {
+        return substr(pos1, count1).compare(v);
+    }
+    constexpr int compare(
+        size_type pos1, size_type count1, string_view v, size_type pos2, size_type count2) const {
+        return substr(pos1, count1).compare(v.substr(pos2, count2));
+    }
+    constexpr int compare(const char* s) const { return compare(string_view(s)); }
+    constexpr int compare(size_type pos1, size_type count1, const char* s) const {
+        return substr(pos1, count1).compare(string_view(s));
+    }
+    constexpr int compare(size_type pos1, size_type count1, const char* s, size_type count2) const {
+        return substr(pos1, count1).compare(string_view(s, count2));
+    }
+
+    constexpr size_type find(string_view v, size_type pos = 0) const noexcept {
+        pos = std::min(pos, size());
+        size_type result = search(begin() + pos, end(), v.begin(), v.end()) - begin();
+        if (result == size()) return npos;
+        return result;
+    }
+    constexpr size_type find(char ch, size_type pos = 0) const noexcept {
+        pos = std::min(pos, size());
+        size_type result =  apollo::find(begin() + pos, end(), ch) - begin();
+        if (result == size()) return npos;
+        return result;
+    }
+    constexpr size_type find(const char* s, size_type pos, size_type count) const {
+        return find(string_view(s, count), pos);
+    }
+    constexpr size_type find(const char* s, size_type pos = 0) const {
+        return find(string_view(s), pos);
+    }
+
+#if 0
+    constexpr size_type rfind(string_view v, size_type pos = npos) const noexcept {
+        return search(rbegin()
+    }
+    constexpr size_type rfind(char c, size_type pos = npos) const noexcept;
+    constexpr size_type rfind(const char* s, size_type pos, size_type count) const;
+    constexpr size_type rfind(const char* s, size_type pos = npos) const;
+#endif
+
+
+private:
+    const char* _str;
+    std::size_t _size;
+};
+
+} // namespace apollo
+
+#include <iostream>
+#include <numeric>
+#include <cmath>
+using namespace std;
+
+inline extern constexpr apollo::string_view phrase = "Hello World!";
+//inline constexpr apollo::string_view word1 =
+
+std::uint64_t step_distance(double x, double y) {
+    std::uint64_t xb;
+    std::uint64_t yb;
+    memcpy(&xb, &x, sizeof(double));
+    memcpy(&yb, &y, sizeof(double));
+
+    return (xb < yb) ? yb - xb : xb - yb;
+}
+
+void print(double x) {
+    cout << x << " : " << hex << reinterpret_cast<std::uint64_t&>(x) << " : " << static_cast<std::uint64_t>(x) << endl;
+}
+
+int main() {
+    cout << sizeof(long) << endl;
+    cout << sizeof(long long) << endl;
+
+    print(2.0);
+    print(2.0 + numeric_limits<double>::epsilon());
+    cout << (std::numeric_limits<double>::epsilon() > std::numeric_limits<double>::min()) << endl;
+    print(1.0 + numeric_limits<double>::epsilon());
+    print(nextafter(1.0, 2.0));
+
+    print(std::numeric_limits<double>::min() / std::numeric_limits<double>::denorm_min());
+
+    print(std::numeric_limits<double>::min());
+    print(std::numeric_limits<double>::denorm_min());
+
+    // for (double x = 0.0; x < numeric_limits<double>::min(); x = nextafter(x, 1.0)) ;
+
+    print(nextafter(0.0, -1.0));
+
+    double x = nextafter(0.0, numeric_limits<double>::max());
+    cout << x << endl << hex << reinterpret_cast<std::uint64_t&>(x) << endl;
+    cout << numeric_limits<double>::epsilon() << endl;
+
+    // cout << step_distance(0.0, std::numeric_limits<double>::epsilon());
+
+    constexpr apollo::string_view str = "Hello World!";
+    constexpr auto str2 = str.substr(str.find(' ') + 1);
+
+    auto p = const_cast<apollo::string_view*>(&str);
+    *p = str2;
+    cout << str.data() << endl;
+}
+#endif
+
+#if 0
+#include <stlab/concurrency/future.hpp>
+#include <stlab/concurrency/immediate_executor.hpp>
+#include <stlab/test/model.hpp>
+
+int main() {
+    cout << step_distance(10.0, 10.0 + std::numeric_limits<double>::epsilon() * 5);
+
+
+    stlab::annotate a;
+    stlab::async(stlab::immediate_executor, [](const auto& x) -> const auto& { return x; },
+                 std::cref(a));
+}
+
+#endif
+
+#if 0
+#include <iostream>
+#include <future>
+
+#include <stlab/concurrency/default_executor.hpp>
+#include <stlab/concurrency/future.hpp>
+
+struct SharedState
+{
+    int counter1;
+    long double weighted1;
+    std::string tag; // < make it not POD.
+};
+
+void spawn(const SharedState& in, SharedState& out, SharedState& inOut)
+{
+    // stlab::async will accept this (refs are to const):
+    auto taskPureConst = [] (int i, long double f, const SharedState& in, const SharedState& in2) -> float
+    {
+        long double acc = f;
+        for(int j = 0; j < i; ++j)
+        {
+            acc += in.weighted1 + in2.weighted1;
+        }
+
+        return acc / (2 * i);
+    };
+
+    // stlab::async won't accept this:
+    auto taskNonConst = [] (int i, long double f, SharedState& inOut) -> SharedState&
+    {
+        for(int j = 0; j < i; ++j)
+        {
+            inOut.weighted1 += f;
+        }
+        inOut.counter1 += i;
+
+        return inOut;
+    };
+
+    // stlab::async won't accept this:
+    auto taskNonConst_02_no_return = [] (int i, long double f, SharedState& inOut){
+        for(int j = 0; j < i; ++j)
+        {
+            inOut.weighted1 += f;
+        }
+        inOut.counter1 += i;
+    };
+
+    auto taskNonConst_03_pass_through_capture_no_return = [&inOut] (int i, long double f){
+        for(int j = 0; j < i; ++j)
+        {
+            inOut.weighted1 += f;
+        }
+        inOut.counter1 += i;
+    };
+
+    // stlab::async won't accept this:
+    auto taskConst = [] (int i, long double f, const SharedState& in, SharedState& out) -> const SharedState &
+    {
+        out.counter1 = in.counter1;
+        out.weighted1 = in.weighted1;
+        for(int j = 0; j < i; ++j)
+        {
+            out.weighted1 += f;
+        }
+        out.counter1 += i;
+
+        return in;
+    };
+
+    const int i = rand() & 0xff;
+    const long double f = rand() / double(RAND_MAX);
+
+    // Direct calls work fine:
+    auto& direct = taskNonConst(i, f, inOut);
+    taskNonConst_02_no_return(i, f, inOut);
+    taskNonConst_03_pass_through_capture_no_return(i, f);
+    const SharedState& directConst = taskConst(i, f, in, out);
+    std::cout << "taskPureConst(): "  << taskPureConst(i,f, in, inOut) << std::endl;
+
+    // Const references compile fine:
+    std::async(std::launch::async, taskPureConst, i,f, in, inOut);
+    stlab::async(stlab::default_executor, taskPureConst, i,f, in, inOut);
+
+    // Non-const references known at lambda creation time can be "passed" as captures:
+    auto stdFutureCapture1 = std::async(std::launch::async, taskNonConst_03_pass_through_capture_no_return, i, f);
+    auto stlabFutureCapture1 = stlab::async(stlab::default_executor, taskNonConst_03_pass_through_capture_no_return, i, f); // Compiles
+
+    // Non-const references fail to compile, even using std::ref():
+
+    auto stdFuture1 = std::async(std::launch::async, taskNonConst, i, f, std::ref(inOut)); // Compiles [expect: compile as std::ref used]
+    //auto stdFuture2 = std::async(std::launch::async, taskNonConst, i, f, inOut); // Fails [expect: fail as non-const ref not allowed for async]
+    auto stlabFuture1 = stlab::async(stlab::default_executor, taskNonConst, i, f, std::ref(inOut)); // Fail [expect: compile as std::ref used]
+    //auto stlabFuture2 = stlab::async(stlab::default_executor, taskNonConst, i, f, inOut);  // Fails [expect: fail as non-const ref not allowed]
+
+    auto stdFutureNoRet1 = std::async(std::launch::async, taskNonConst_02_no_return, i, f, std::ref(inOut));
+    auto stlabFutureNoRet1 = stlab::async(stlab::default_executor, taskNonConst_02_no_return, i, f, std::ref(inOut)); // Fails
+
+    auto stdFutureConst1 = std::async(std::launch::async, taskConst, i, f, in, std::ref(out));
+    auto stlabFutureConst1 = stlab::async(stlab::default_executor, taskConst, i, f, in, std::ref(out)); // Fails
+
+    while(!stlabFutureCapture1.get_try()) {
+        std::this_thread::yield();
+    }
+}
+
+int main()
+{
+    SharedState in { 0, 0.0, "Hi"};
+    SharedState out { 0, 0.0, "Hi"};
+    SharedState inOut { 0, 0.0, "Hi"};
+
+    spawn(in, out, inOut);
+
+    // Prevent dead code elimination:
+    auto result = out.counter1 + out.weighted1 + out.tag.capacity() + inOut.counter1 + inOut.weighted1 + inOut.tag.capacity();
+    std::cout << "result = " << result << std::endl;
+
+    return result <= 0.0;
+}
+
+#endif
+
+#if 0
+//
+//  main.cpp
+//  playground
+//
+//  Created by Nick DeMarco on 8/11/17.
+//  Copyright © 2017 Nick DeMarco. All rights reserved.
+//
+
+#include <memory>
+#include <array>
+#include <iostream>
+
+using namespace std;
+
+//template <class T, // T models integral type
+//class F> // F is a function void(T)
+//void bresenham_line(T x0, T y0, T x1, T y1, F out) {
+//    auto dx = x1 - x0;
+//    auto dy = y1 - y0;
+//    auto D = 2 * dy - dx;
+//    auto y = y0;
+//    
+//    for (auto x = x0; x != x1; ++x) {
+//        out(y);
+//        if (D > 0) {
+//            y = y + 1;
+//            D = D - dx;
+//        }
+//        D = D + dy;
+//    }
+//}
+
+
+// The below is a virtual copy of the algorithm posted on Stack Overflow.
+template <class T, // T models integral type
+class F> // F is a function void(T)
+void clipping_bresenham_line(T x0, T y0, T x1, T y1, T bottom, T top, F out) {
+    auto dx = x1 - x0;
+    auto dy = y1 - y0;
+    auto limit = (dx + 1) / 2; // rounding up.
+    
+    auto x = top;
+    auto remainder = ( (x - x0) * dy % dx) - limit;
+    auto y = y0 + (x - x0) * dy / dx;
+    if (remainder >= 0) {
+        remainder -= dx;
+        y++;
+    }
+    
+    for (; x < bottom; ++x) {
+        out(y);
+        remainder += dy;
+        if (remainder >= 0) {
+            remainder -= dx;
+            y++;
+        }
+    }
+}
+
+// This is a simplified version that leverages the facts that we can have a simpler method signature (fewer args)
+template <class T, // T models integral type
+class F> // F is a function void(T)
+void simplified_cbl(double factor, T bottom, T top, F out) {
+        /*
+        Changes:
+            1. x0 and y0 are always 0. Let's remove them entirely.
+            2. x1 is always numeric_limits::max(), and y1 is always max() / (scale * size). Change arguments to reflect that.
+                a. Remove x1 and y1 as arguments. We know what they'll be.
+                b. Let (scale * size) = a new argument called 'factor'.
+                c. Define dx and dy as max() and max() / factor, respectively.
+            3. Limit is defined as forcing an overflow, and then dividing by two.
+                a. Let's set limit to what it actually is: numeric_limits::min() / 2.
+            4. Let's change out() to accept a bool that we toggle instead of an incrementing int.
+                a. first, change invocations below: I believe that logically,
+                    ((rc + cc) & 1) == ((rc ^ cc)), where the former uses incrementing ints and the latter uses a toggled boolean.
+                b. Change the use of y to become a boolean. Whevever there's an increment to y, change it to y = !y.
+            5. Oops! Put the rounding back in. Let's take it out again.
+                a. Define remainder as (2 * dy - dx), in order to have the top-left viewed checker be full.
+                b. This allows us to also take out the if-block below the definition of y; remainder will now always start as negative.
+                    Right? remainder would be positive if 2 * dy were a negative number, because subtracting dx would cause an underflow.
+                    But we know that dy will always be positive, because factor will always be positive (should we enforce with an assert?)
+                c. This also lets us remove the definition of limit, as it was only used to handle the rounding of remainder.
+         
+        */
+//  By 2,
+    auto dx = numeric_limits<int>::max();
+    auto dy = static_cast<int>(numeric_limits<int>::max() / (factor));
+    
+//    auto limit = (dx + 1) / 2; // rounding up.
+//  By 3a, and removed by 5c.
+//    auto limit = numeric_limits<T>::min() / 2;
+    
+    auto x = top;
+//    auto remainder = ((x) * dy % dx) - limit;
+//  By 5a,
+    auto remainder = 2 * dy - dx;
+    
+//  By 4b,
+    auto y = ((x) * dy / dx) % 2;
+
+//  By 5b,
+//    if (remainder >= 0) {
+//        remainder -= dx;
+//        y = !y;
+//    }
+    
+    for (; x < bottom; ++x) {
+        out(y);
+        remainder += dy;
+        if (remainder >= 0) {
+            remainder -= dx;
+            y = !y;
+        }
+    }
+}
+
+void bresenham_checkerboard(int size, const std::array<int, 4>& rect, double scale)
+{
+    auto [left, top, right, bottom] = rect;
+    auto scaleFactor = size * scale;
+//    auto x1 = numeric_limits<int>::max();
+//    auto y1 = static_cast<int>(numeric_limits<int>::max() / (size * scale));
+//    
+//    clipping_bresenham_line(0, 0, x1, y1, bottom, top, [&, _right = right, _left = left](int rc) {
+//        clipping_bresenham_line(0, 0, x1, y1, _right, _left, [&](int cc) {
+//            cout << (((rc + cc) & 1) ? "*" : " ");
+//        });
+//        cout << endl;
+//    });
+
+    // Notice the above produces identical (I hope?) output to the bottom. Should test more formally before commiting to anything.
+//    cout << "----------------------------------------------------------------------" << endl;
+
+    simplified_cbl(scaleFactor, bottom, top, [&, _right = right, _left = left](bool rc) {
+        simplified_cbl(scaleFactor, _right, _left, [&](bool cc) {
+            cout << ((rc ^ cc) ? "*" : " ");
+        });
+        cout << endl;
+    });
+    
+}
+
+int main(int argc, const char * argv[]) {
+    bresenham_checkerboard(10, {0, 0, 100, 100 }, 1.0);
+}
+
+
+#endif
+#if 0
+template <class T>
+auto make_weak(T* p) -> std::enable_if_t<detail::has_shared_from_this<T>, std::weak_ptr<T>> {
+    return p ? std::static_pointer_cast<T>(p->shared_from_this()) : std::weak_ptr<T>();
+}
+
+#include <iostream>
+using namespace apollo;
+using namespace std;
+
+struct base : enable_track<base> {
+};
+
+struct derived : base {
+    void member() const { cout << "made it!" << endl; }
+};
+
+int main() {
+    derived x;
+    auto p = track(&x);
+    p.lock()->member();
+}
+
+#endif
+
+#if 0
+/*
+    Interface to a future -
+        operator|(function) -> future
+*/
+
+template <class F>
+class future {
+    F _f;
+};
+
+#include <utility>
+
+template <typename E>
+void async(E&& e) {
+    static_assert(noexcept(std::forward<E>(e)()), "e must be noexcept");
+}
+
+int main() {
+    async([]() noexcept {});
+    // async([] {});
+}
+
+#endif
+
+
+
+
+#if 0
+#include <algorithm>
+
+/*
+    [f, l) is a range of pointers to the start of scan lines of length n
+*/
+
+template <class I, // I models RandomAccessIterator
+          class N> // N is distance_type(I)
+void reverse_lines(I f, I l, N n) {
+    while (f != l) {
+        l -= n;
+        if (f == l) break;
+        std::swap_ranges(f, f + n, l);
+        f += n;
+    }
+}
+
+#include <iostream>
+
+using namespace std;
+
+int main() {
+    int a [] {
+        1, 2, 3,
+        4, 5, 6,
+        7, 8, 9
+    };
+
+    reverse_lines(begin(a), end(a), 3);
+
+    for (const auto& e : a) cout << e << endl;
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <thread>
+
+#include <stlab/concurrency/channel.hpp>
+#include <stlab/concurrency/immediate_executor.hpp>
+
+using namespace stlab;
+using namespace std;
+int main() {
+    auto [send, receive] = channel<int>(immediate_executor);
+
+    int v = 0;
+
+    auto result1 = receive
+        | executor{ immediate_executor } & [](int x) {
+            std::this_thread::sleep_for(std::chrono::seconds(1)); // short delay
+            std::cout << "Hello ";            
+            return x * 2;
+        };
+
+    auto result2 = receive
+        | executor{ immediate_executor } & [](int x) { 
+            std::this_thread::sleep_for(std::chrono::seconds(2)); // long delay
+            std::cout << "World!\n";
+            return x;
+        }
+        | [&v](int x) { v = x; };
+
+    receive.set_ready();
+    result1.set_ready();
+    result2.set_ready();
+
+    send(42);
+}
+
+#endif
+
+
+#if 0
+
+#include <iostream>
+
+#include <stlab/concurrency/future.hpp>
+#include <stlab/concurrency/immediate_executor.hpp>
+
+#include <locale>
+
+using namespace stlab;
+using namespace std;
+
+#if 0
+template <class...> class car_cdr;
+template <class A0, class... Args>
+struct car_cdr<A0, Args...> {
+    using car = A0;
+    using cdr = std::tuple<Args...>;
+};
+
+template <class> class _task;
+template <class R, class... Args>
+class _task<R(Args...)> {
+    class concept {
+
+    };
+};
+
+#endif
+
+
+struct annotate {
+    annotate() { cout << "annotate ctor" << endl; }
+    annotate(const annotate&) { cout << "annotate copy-ctor" << endl; }
+    annotate(annotate&&) noexcept { cout << "annotate move-ctor" << endl; }
+    annotate& operator=(const annotate&) {
+        cout << "annotate assign" << endl;
+        return *this;
+    }
+    annotate& operator=(annotate&&) noexcept {
+        cout << "annotate move-assign" << endl;
+        return *this;
+    }
+    ~annotate() { cout << "annotate dtor" << endl; }
+    friend inline void swap(annotate&, annotate&) { cout << "annotate swap" << endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+template <class T>
+inline auto promise_future() {
+    return package<T(T)>(immediate_executor, [](auto&& x) -> decltype(auto) { return std::forward<decltype(x)>(x); });
+}
+
+int main() {
+
+    task<void(annotate)> f;
+    f = [](const auto&){ };
+    f(annotate());
+    annotate x;
+    f(x); // unnessary copy-ctor call
+
+    f = [](auto&&){ };
+    f(annotate());
+    f(move(x)); // unnessary move-ctor call
+
+#if 0
+    function<void(const annotate&)> f1 = [](const annotate& x) { };
+    // function<void(const annotate&)> f2 = [](annotate&& x) { }; // error
+    function<void(const annotate&)> f3 = [](annotate x) { };
+    //function<void(const annotate&)> f4 = [](annotate& x) { };
+
+    function<void(annotate&&)> f5 = [](const annotate& x) { };
+    function<void(annotate&&)> f6 = [](annotate&& x) { };
+    function<void(annotate&&)> f7 = [](annotate x) { };
+    // function<void(annotate&&)> f8 = [](annotate& x) { };
+
+    function<void(annotate)> f9 = [](const annotate& x) { };
+    function<void(annotate)> f10 = [](annotate&& x) { };
+    function<void(annotate)> f11 = [](annotate x) { };
+    // function<void(annotate)> f12 = [](annotate& x) { };
+
+    function<void(annotate&)> f13 = [](const annotate& x) { };
+    // function<void(annotate&)> f14 = [](annotate&& x) { };
+    function<void(annotate&)> f15 = [](annotate x) { };
+    function<void(annotate&)> f16 = [](annotate& x) { };
+
+    f1(annotate());
+    // f2(annotate());
+    f3(annotate());
+    // f4(annotate());
+
+    f5(annotate());
+    f6(annotate());
+    f7(annotate());
+    // f8(annotate());
+
+    f9(annotate());
+    f10(annotate());
+    f11(annotate());
+    // f12(annotate());
+
+    auto x = annotate();
+    f13(x);
+    // f14(annotate());
+    f15(x);
+    f16(x);
+#elif 0
+    task<void(const annotate&)> f1 = [](const annotate& x) { };
+    // task<void(const annotate&)> f2 = [](annotate&& x) { }; // error
+    task<void(const annotate&)> f3 = [](annotate x) { };
+    // task<void(const annotate&)> f4 = [](annotate& x) { };
+
+    task<void(annotate&&)> f5 = [](const annotate& x) { };
+    task<void(annotate&&)> f6 = [](annotate&& x) { };
+    task<void(annotate&&)> f7 = [](annotate x) { };
+    // task<void(annotate&&)> f8 = [](annotate& x) { };
+
+    task<void(annotate)> f9 = [](const annotate& x) { };
+    task<void(annotate)> f10 = [](annotate&& x) { };
+    task<void(annotate)> f11 = [](annotate x) { };
+    // task<void(annotate)> f12 = [](annotate& x) { };
+
+    task<void(annotate&)> f13 = [](const annotate& x) { };
+    // task<void(annotate&)> f14 = [](annotate&& x) { };
+    task<void(annotate&)> f15 = [](annotate x) { };
+    task<void(annotate&)> f16 = [](annotate& x) { };
+
+    f1(annotate());
+    // f2(annotate());
+    f3(annotate());
+    // f4(annotate());
+
+    f5(annotate());
+    f6(annotate());
+    f7(annotate());
+    // f8(annotate());
+
+    f9(annotate());
+    f10(annotate());
+    f11(annotate());
+    // f12(annotate());
+
+    auto x = annotate();
+    f13(x);
+    // f14(annotate());
+    f15(x);
+    f16(x);
+
+#endif
+
+#if 0
+    cout << std::locale().name() << endl;
+#endif
+
+#if 0
+    auto [promise, future] = promise_future<annotate>();
+    promise(annotate());
+    auto x = future.get_try();
+    auto y = x;
+    annotate z = y.get();
+#endif
+
+}
+
+#endif
+
+
+#if 0
+
+#include <memory>
+#include <iostream>
+
+#define STLAB_TASK_SYSTEM STLAB_TASK_SYSTEM_PORTABLE
+#include <stlab/concurrency/default_executor.hpp>
+
+#include <stlab/concurrency/future.hpp>
+
+struct test {
+    std::unique_ptr<int> _m;
+    test(std::unique_ptr<int> m) : _m(std::move(m)) { }
+};
+
+int main() {
+    
+    stlab::async(stlab::default_executor, [_p = std::make_unique<int>(42)]() mutable {
+        return std::move(_p);
+    }).then([](auto&& p){ auto _p = std::move(p); std::cout << *_p << std::endl; }).detach();
+
+
+#if 0
+    auto c = std::make_shared<test>(std::make_unique<int>(42));
+
+    stlab::default_executor([ _p = std::make_unique<int>(42)]() mutable {
+        std::cout << *_p << std::endl;
+    });
+
+    auto a = std::bind([ _p = std::make_unique<int>(42)]() mutable {
+        std::cout << *_p << std::endl;
+    });
+    auto b = std::move(a);
+
+    stlab::async(stlab::default_executor, [](const auto& p) {
+        std::cout << *p << std::endl;
+    }, std::make_unique<int>(42)).detach();
+#endif
+
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <type_traits>
+
+using namespace std;
+
+template <size_t N, class F>
+auto curry(F&& f) {
+    if constexpr (N == 1) return forward<F>(f);
+    else
+        return [_f = forward<F>(f)](auto&& x) {
+            return curry<N - 1>([ _f, _x = forward<decltype(x)>(x) ](auto&&... args) {
+                return _f(_x, forward<decltype(args)>(args)...);
+            });
+        };
+}
+
+int main() {
+    using std::cout;
+    auto cf = curry<4>([](auto a, auto b, auto c, auto d) { return a * b * c * d; });
+    auto const answer = cf(3)(4)(5)(6);
+    auto paf = cf(3)(4);
+    auto const answer2 = paf(5)(6);
+    cout << "answer: " << answer << "\n";
+    cout << "answer2: " << answer2 << "\n";
+}
+
+#endif
+
+#if 0
+
 #include <cassert>
 
 /*
@@ -8,7 +2199,7 @@
     Note that normally assert() can be used to let the analyzer know that a condition cannot
     happen to silence false positives. It does this by assuming that if the condition is met, the
     assertion does not return and that this is expected behavior. Although this does quiet false
-   positives, it has the negative effect of also masking legitimate issues.
+    positives, it has the negative effect of also masking legitimate issues.
 
     Where that behavior is desirable, assert() should be used with an appropriate comment, or use
     one of the clang attributes. <https://clang-analyzer.llvm.org/faq.html>
@@ -36,11 +2227,13 @@ double arccos(double x) {
     return x;
 }
 
-int main() { return arccos(42.0); }
+int main() {
+    return arccos(42.0);
+}
 
 
 
-
+#endif
 
 
 
@@ -86,7 +2279,7 @@ void bresenham_checkerboard(int size, const std::array<int, 4>& rect, double sca
 }
 
 int main() {
-    bresenham_checkerboard(4, { 0, 0, 100, 100 }, 1.3);
+    bresenham_checkerboard(10, { 5, 5, 100, 100 }, 1.3);
 }
 
 #endif

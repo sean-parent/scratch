@@ -3,20 +3,37 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 46;
+	objectVersion = 48;
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9A304B941EF47A27000DE8DA /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9AAE19E116F81487007BC561 /* main.cpp */; };
 		9A304B961EF47B60000DE8DA /* future.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE71A971C8D00207431 /* future.cpp */; };
 		9A304B981EF47B60000DE8DA /* once.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE91A971C8D00207431 /* once.cpp */; };
 		9A304B991EF47B60000DE8DA /* thread.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEA1A971C8D00207431 /* thread.cpp */; };
 		9A304B9A1EF47B60000DE8DA /* tss_null.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEC1A971C8D00207431 /* tss_null.cpp */; };
 		9A304B9C1EF47B84000DE8DA /* error_code.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBF21A971D0C00207431 /* error_code.cpp */; };
+		9A50E51E1F45606B0010006C /* libadobe_source.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A551F0619116E7E00C388E5 /* libadobe_source.a */; };
+		9A50E5211F4560920010006C /* libadobe_source.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A551F0619116E7E00C388E5 /* libadobe_source.a */; };
 		9A729E001EEA524F0015B7EB /* scratch_test.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A729DFF1EEA524F0015B7EB /* scratch_test.m */; };
+		9ACAF6151F8DDF1700F5C207 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9AAE19E116F81487007BC561 /* main.cpp */; };
+		9ADF796C1F54DEA5002521B2 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9ADF796B1F54DEA5002521B2 /* AppKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		9A50E51A1F4560620010006C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = D2AAC045055464E500DB518D;
+			remoteInfo = adobe_source;
+		};
+		9A50E51F1F45608B0010006C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */;
+			proxyType = 1;
+			remoteGlobalIDString = D2AAC045055464E500DB518D;
+			remoteInfo = adobe_source;
+		};
 		9A551F0519116E7E00C388E5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */;
@@ -47,7 +64,8 @@
 
 /* Begin PBXFileReference section */
 		9A209FCA192D67CA00BF00F4 /* time.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = time.cpp; sourceTree = "<group>"; };
-		9A4E64421C45C42B00ACFE46 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = main.cpp; path = ../../../stlab/libraries/test/main.cpp; sourceTree = "<group>"; };
+		9A47429E1F219B4A000C5929 /* future_recover_tests.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = future_recover_tests.cpp; path = source/stlab/test/future_recover_tests.cpp; sourceTree = "<group>"; };
+		9A4742B81F219E18000C5929 /* main.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = main.cpp; path = source/stlab/test/main.cpp; sourceTree = "<group>"; };
 		9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = adobe_source.xcodeproj; path = ../../stlab/adobe_source_libraries/xcode_ide/adobe_source.xcodeproj; sourceTree = "<group>"; };
 		9A551F3C1911746500C388E5 /* double_conversion.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = double_conversion.xcodeproj; path = ../../stlab/adobe_source_libraries/xcode_ide/double_conversion.xcodeproj; sourceTree = "<group>"; };
 		9A5FF6261926B70C002D8208 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
@@ -92,6 +110,8 @@
 		9ACCBBEA1A971C8D00207431 /* thread.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = thread.cpp; path = source/boost/thread/src/pthread/thread.cpp; sourceTree = "<group>"; };
 		9ACCBBEC1A971C8D00207431 /* tss_null.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = tss_null.cpp; path = source/boost/thread/src/tss_null.cpp; sourceTree = "<group>"; };
 		9ACCBBF21A971D0C00207431 /* error_code.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = error_code.cpp; path = source/boost/system/src/error_code.cpp; sourceTree = "<group>"; };
+		9ADF79691F54DCD6002521B2 /* main.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = main.hpp; sourceTree = "<group>"; };
+		9ADF796B1F54DEA5002521B2 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
 		9AE077F0184D3DC3008C8DB6 /* includes */ = {isa = PBXFileReference; lastKnownFileType = folder; path = includes; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -100,6 +120,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9A50E51E1F45606B0010006C /* libadobe_source.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -107,6 +128,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9ADF796C1F54DEA5002521B2 /* AppKit.framework in Frameworks */,
+				9A50E5211F4560920010006C /* libadobe_source.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,6 +153,33 @@
 				9ACCBBF21A971D0C00207431 /* error_code.cpp */,
 			);
 			name = boost_system;
+			sourceTree = "<group>";
+		};
+		9A4742B71F219C2B000C5929 /* boost_test */ = {
+			isa = PBXGroup;
+			children = (
+				9A97D6F81EF0DDB00058DF40 /* compiler_log_formatter.cpp */,
+				9A97D6F91EF0DDB00058DF40 /* cpp_main.cpp */,
+				9A97D6FA1EF0DDB00058DF40 /* debug.cpp */,
+				9A97D6FB1EF0DDB00058DF40 /* decorator.cpp */,
+				9A97D6FC1EF0DDB00058DF40 /* execution_monitor.cpp */,
+				9A97D6FD1EF0DDB00058DF40 /* framework.cpp */,
+				9A97D6FE1EF0DDB00058DF40 /* junit_log_formatter.cpp */,
+				9A97D6FF1EF0DDB00058DF40 /* plain_report_formatter.cpp */,
+				9A97D7001EF0DDB00058DF40 /* progress_monitor.cpp */,
+				9A97D7011EF0DDB00058DF40 /* results_collector.cpp */,
+				9A97D7021EF0DDB00058DF40 /* results_reporter.cpp */,
+				9A97D7031EF0DDB00058DF40 /* test_main.cpp */,
+				9A97D7041EF0DDB00058DF40 /* test_tools.cpp */,
+				9A97D7051EF0DDB00058DF40 /* test_tree.cpp */,
+				9A97D7061EF0DDB00058DF40 /* unit_test_log.cpp */,
+				9A97D7071EF0DDB00058DF40 /* unit_test_main.cpp */,
+				9A97D7081EF0DDB00058DF40 /* unit_test_monitor.cpp */,
+				9A97D7091EF0DDB00058DF40 /* unit_test_parameters.cpp */,
+				9A97D70A1EF0DDB00058DF40 /* xml_log_formatter.cpp */,
+				9A97D70B1EF0DDB00058DF40 /* xml_report_formatter.cpp */,
+			);
+			name = boost_test;
 			sourceTree = "<group>";
 		};
 		9A551F0219116E7E00C388E5 /* Products */ = {
@@ -183,6 +233,8 @@
 			isa = PBXGroup;
 			children = (
 				9AAA412E1EF86F260080B415 /* experimental_channel.cpp */,
+				9A47429E1F219B4A000C5929 /* future_recover_tests.cpp */,
+				9A4742B81F219E18000C5929 /* main.cpp */,
 				9A5FF61F1926B70C002D8208 /* libdispatch */,
 				9A551F3C1911746500C388E5 /* double_conversion.xcodeproj */,
 				9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */,
@@ -192,6 +244,7 @@
 				9AE077F0184D3DC3008C8DB6 /* includes */,
 				9A729DFE1EEA524E0015B7EB /* scratch-test */,
 				9AAE19DF16F81487007BC561 /* Products */,
+				9ADF796A1F54DEA5002521B2 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -211,7 +264,7 @@
 				9A97D6F61EF0D7E60058DF40 /* cow_test.cpp */,
 				9ACCBBE41A971B9800207431 /* config.hpp */,
 				9AAE19E116F81487007BC561 /* main.cpp */,
-				9A4E64421C45C42B00ACFE46 /* main.cpp */,
+				9ADF79691F54DCD6002521B2 /* main.hpp */,
 				9ABAFE9F18D1696A00652166 /* objc.mm */,
 				9ABA64E81A05A77700E6E8E6 /* View.xib */,
 			);
@@ -223,28 +276,17 @@
 			children = (
 				9A304B9B1EF47B74000DE8DA /* boost_system */,
 				9A304B951EF47B2C000DE8DA /* boost_thread */,
-				9A97D6F81EF0DDB00058DF40 /* compiler_log_formatter.cpp */,
-				9A97D6F91EF0DDB00058DF40 /* cpp_main.cpp */,
-				9A97D6FA1EF0DDB00058DF40 /* debug.cpp */,
-				9A97D6FB1EF0DDB00058DF40 /* decorator.cpp */,
-				9A97D6FC1EF0DDB00058DF40 /* execution_monitor.cpp */,
-				9A97D6FD1EF0DDB00058DF40 /* framework.cpp */,
-				9A97D6FE1EF0DDB00058DF40 /* junit_log_formatter.cpp */,
-				9A97D6FF1EF0DDB00058DF40 /* plain_report_formatter.cpp */,
-				9A97D7001EF0DDB00058DF40 /* progress_monitor.cpp */,
-				9A97D7011EF0DDB00058DF40 /* results_collector.cpp */,
-				9A97D7021EF0DDB00058DF40 /* results_reporter.cpp */,
-				9A97D7031EF0DDB00058DF40 /* test_main.cpp */,
-				9A97D7041EF0DDB00058DF40 /* test_tools.cpp */,
-				9A97D7051EF0DDB00058DF40 /* test_tree.cpp */,
-				9A97D7061EF0DDB00058DF40 /* unit_test_log.cpp */,
-				9A97D7071EF0DDB00058DF40 /* unit_test_main.cpp */,
-				9A97D7081EF0DDB00058DF40 /* unit_test_monitor.cpp */,
-				9A97D7091EF0DDB00058DF40 /* unit_test_parameters.cpp */,
-				9A97D70A1EF0DDB00058DF40 /* xml_log_formatter.cpp */,
-				9A97D70B1EF0DDB00058DF40 /* xml_report_formatter.cpp */,
+				9A4742B71F219C2B000C5929 /* boost_test */,
 			);
 			name = src;
+			sourceTree = "<group>";
+		};
+		9ADF796A1F54DEA5002521B2 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				9ADF796B1F54DEA5002521B2 /* AppKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -261,6 +303,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				9A50E51B1F4560620010006C /* PBXTargetDependency */,
 			);
 			name = "scratch-test";
 			productName = "scratch-test";
@@ -278,6 +321,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				9A50E5201F45608B0010006C /* PBXTargetDependency */,
 			);
 			name = scratch;
 			productName = scratch;
@@ -290,7 +334,7 @@
 		9AAE19D616F81487007BC561 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0800;
+				LastUpgradeCheck = 0900;
 				ORGANIZATIONNAME = stlab;
 				TargetAttributes = {
 					9A729DFC1EEA524E0015B7EB = {
@@ -300,7 +344,7 @@
 				};
 			};
 			buildConfigurationList = 9AAE19D916F81487007BC561 /* Build configuration list for PBXProject "scratch" */;
-			compatibilityVersion = "Xcode 3.2";
+			compatibilityVersion = "Xcode 8.0";
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -368,15 +412,28 @@
 			buildActionMask = 2147483647;
 			files = (
 				9A304B961EF47B60000DE8DA /* future.cpp in Sources */,
-				9A304B941EF47A27000DE8DA /* main.cpp in Sources */,
 				9A304B981EF47B60000DE8DA /* once.cpp in Sources */,
 				9A304B9C1EF47B84000DE8DA /* error_code.cpp in Sources */,
+				9ACAF6151F8DDF1700F5C207 /* main.cpp in Sources */,
 				9A304B9A1EF47B60000DE8DA /* tss_null.cpp in Sources */,
 				9A304B991EF47B60000DE8DA /* thread.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9A50E51B1F4560620010006C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = adobe_source;
+			targetProxy = 9A50E51A1F4560620010006C /* PBXContainerItemProxy */;
+		};
+		9A50E5201F45608B0010006C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = adobe_source;
+			targetProxy = 9A50E51F1F45608B0010006C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		9A729E021EEA524F0015B7EB /* Debug */ = {
@@ -430,15 +487,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
@@ -462,7 +525,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = "\"$(SRCROOT)/includes\"";
-				MACOSX_DEPLOYMENT_TARGET = 10.10;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CPLUSPLUSFLAGS = "$(OTHER_CFLAGS)";
 				SDKROOT = macosx;
@@ -474,15 +537,21 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_CXX_LANGUAGE_STANDARD = "c++14";
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
@@ -499,7 +568,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = "\"$(SRCROOT)/includes\"";
-				MACOSX_DEPLOYMENT_TARGET = 10.10;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OTHER_CPLUSPLUSFLAGS = "$(OTHER_CFLAGS)";
 				SDKROOT = macosx;
 				VALID_ARCHS = x86_64;

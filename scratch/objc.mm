@@ -1,3 +1,36 @@
+#import <AppKit/AppKit.h>
+#include <iostream>
+
+using namespace std;
+
+int main() {
+    float screenScale = 2.0;
+
+    auto mapping = CGAffineTransformScale(
+    CGAffineTransformMakeTranslation(10, 10), 1.0 / screenScale,
+    1.0 / screenScale);
+
+
+    auto p = CGPointApplyAffineTransform(CGPointMake(2, 2), mapping);
+
+    cout << p.x << endl << p.y << endl;
+
+}
+
+
+#if 0
+#include "main.hpp"
+
+struct view::implementation {
+    NSView* _view;
+};
+
+view::view() : _self(new view::implementation{[NSView new]}, [](auto* x){ delete x; })
+{ }
+#endif
+
+
+#if 0
 #include <iostream>
 
 using namespace std;
@@ -58,7 +91,7 @@ int main() {
 
 
 
-
+#endif
 
 
 
