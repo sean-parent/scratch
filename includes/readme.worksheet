@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CurrentWorkingDirectory</key>
+	<string>/Users/seanparent/Projects/github.com/sean-parent/scratch/includes</string>
+	<key>WorksheetContents</key>
+	<string># This directory is to hold include paths. Add symlinks for needed include files as below
+
+cd ~/Projects/github.com/sean-parent/scratch/includes
+
+ln -s ../../../stlab/adobe_source_libraries/adobe \
+	~/Projects/github.com/sean-parent/scratch/includes
+
+ln -s ../../../stlab/double-conversion \
+	~/Projects/github.com/sean-parent/scratch/includes
+	
+ln -s ../../../../boost.org/boost_1_65_1/boost \
+	~/Projects/github.com/sean-parent/scratch/includes
+	
+ln -s ../../../stlab/libraries/stlab \
+	~/Projects/github.com/sean-parent/scratch/includes
+</string>
+</dict>
+</plist>

@@ -7,13 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9A304B961EF47B60000DE8DA /* future.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE71A971C8D00207431 /* future.cpp */; };
-		9A304B981EF47B60000DE8DA /* once.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBE91A971C8D00207431 /* once.cpp */; };
-		9A304B991EF47B60000DE8DA /* thread.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEA1A971C8D00207431 /* thread.cpp */; };
-		9A304B9A1EF47B60000DE8DA /* tss_null.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBEC1A971C8D00207431 /* tss_null.cpp */; };
-		9A304B9C1EF47B84000DE8DA /* error_code.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCBBF21A971D0C00207431 /* error_code.cpp */; };
 		9A50E51E1F45606B0010006C /* libadobe_source.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A551F0619116E7E00C388E5 /* libadobe_source.a */; };
-		9A50E5211F4560920010006C /* libadobe_source.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A551F0619116E7E00C388E5 /* libadobe_source.a */; };
 		9A729E001EEA524F0015B7EB /* scratch_test.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A729DFF1EEA524F0015B7EB /* scratch_test.m */; };
 		9ABE7AA6200EB8CA00CF93AE /* code.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ABE7AA4200EB8CA00CF93AE /* code.cpp */; };
 		9ACAF6151F8DDF1700F5C207 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9AAE19E116F81487007BC561 /* main.cpp */; };
@@ -22,13 +16,6 @@
 
 /* Begin PBXContainerItemProxy section */
 		9A50E51A1F4560620010006C /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */;
-			proxyType = 1;
-			remoteGlobalIDString = D2AAC045055464E500DB518D;
-			remoteInfo = adobe_source;
-		};
-		9A50E51F1F45608B0010006C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 9A551F0119116E7E00C388E5 /* adobe_source.xcodeproj */;
 			proxyType = 1;
@@ -132,7 +119,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				9ADF796C1F54DEA5002521B2 /* AppKit.framework in Frameworks */,
-				9A50E5211F4560920010006C /* libadobe_source.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -326,7 +312,6 @@
 			buildRules = (
 			);
 			dependencies = (
-				9A50E5201F45608B0010006C /* PBXTargetDependency */,
 			);
 			name = scratch;
 			productName = scratch;
@@ -416,9 +401,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				9A304B961EF47B60000DE8DA /* future.cpp in Sources */,
-				9A304B981EF47B60000DE8DA /* once.cpp in Sources */,
-				9A304B9C1EF47B84000DE8DA /* error_code.cpp in Sources */,
 				9ACAF6151F8DDF1700F5C207 /* main.cpp in Sources */,
 				9A304B9A1EF47B60000DE8DA /* tss_null.cpp in Sources */,
 				9A304B991EF47B60000DE8DA /* thread.cpp in Sources */,
@@ -433,11 +415,6 @@
 			isa = PBXTargetDependency;
 			name = adobe_source;
 			targetProxy = 9A50E51A1F4560620010006C /* PBXContainerItemProxy */;
-		};
-		9A50E5201F45608B0010006C /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			name = adobe_source;
-			targetProxy = 9A50E51F1F45608B0010006C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

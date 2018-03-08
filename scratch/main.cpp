@@ -1119,27 +1119,296 @@ int main() {
 #if 0
 
 #include <functional>
-#include <cassert>
+#include <iostream>
+#include <memory>
+#include <vector>
 
-#include <AssertMacros.h>
+using namespace std;
 
+template <class>
+class task;
 
-class some_type {
-   std::function<int(int)> _f;
+template <class R, class... Args>
+class task<R(Args...)> {
+    struct concept;
+
+    static constexpr size_t small_size = sizeof(void*) * 4; 
+    aligned_storage_t<small_size> _data;
+    concept& self() { return *static_cast<concept*>(static_cast<void*>(&_data)); }
+
 public:
-#if 0
-  template <class F> // F is int(int)
-  some_type(F&& f) : _f(std::forward<F>(f)) { }
-#else
-    some_type(std::function<int(int)> f) : _f(std::move(f)) { }
-#endif
+    
+    template <class F, bool Small>
+    struct model;
+    
+    template <class F>
+    task(F&& f) {
+        constexpr bool is_small = sizeof(model<decay_t<F>, true>) <= small_size;
+        new (&_data) model<decay_t<F>, is_small>(forward<F>(f));
+    }
+    
+    ~task() { self().~concept(); }
+    
+    task(task&& x) noexcept { x.self()._move(&_data); }
+    task& operator=(task&& x) noexcept {
+        self().~concept();
+        x.self()._move(&_data);
+        return *this;
+    }
+
+    R operator()(Args... args) {
+        return self()._invoke(forward<Args>(args)...);
+    }
 };
 
-int main() {
-    __Verify(false);
 
-    int x = 5;
-    some_type foo{[_x = x](int a){ return a + _x; }};
+template <class R, class... Args>
+struct task<R(Args...)>::concept {
+    virtual ~concept() = default;
+    virtual R _invoke(Args&&...) = 0;
+    virtual void _move(void*) = 0;
+};
+
+template <class R, class... Args>
+template <class F>
+struct task<R(Args...)>::model<F, true> final : concept {
+    template <class G>
+    model(G&& f) : _f(forward<G>(f)) {}
+    R _invoke(Args&&... args) override { return invoke(_f, forward<Args>(args)...); }
+    void _move(void* p) override { new (p) model(move(*this)); }
+
+    F _f;
+};
+
+template <class R, class... Args>
+template <class F>
+struct task<R(Args...)>::model<F, false> final : concept {
+    template <class G>
+    model(G&& f) : _p(make_unique<F>(forward<F>(f))) {}
+    R _invoke(Args&&... args) override { return invoke(*_p, forward<Args>(args)...); }
+    void _move(void* p) override { new (p) model(move(*this)); }
+
+    unique_ptr<F> _p;
+};
+
+//...
+
+int main() {
+    task<unique_ptr<int>()> f = [_p = make_unique<int>(42)]() mutable { return move(_p); };
+    
+    auto g = move(f);
+    f = move(g);
+
+    cout << *f() << endl;
+    
+    auto l = [p = vector<int>()]{};
+    cout << sizeof(task<void()>::model<decltype(l), true>) << endl;
+}
+
+
+#if 0
+
+#include <functional>
+#include <iostream>
+#include <memory>
+
+using namespace std;
+
+template <class>
+class task;
+
+template <class R, class... Args>
+class task<R(Args...)> {
+    struct concept;
+
+    template <class F>
+    struct model;
+    
+    unique_ptr<concept> _p;
+
+public:
+    template <class F>
+    task(F&& f) : _p(make_unique<model<decay_t<F>>>(forward<F>(f))) { }
+
+    R operator()(Args... args) {
+        return _p->_invoke(forward<Args>(args)...);
+    }
+};
+
+
+template <class R, class... Args>
+struct task<R(Args...)>::concept {
+    virtual ~concept() = default;
+    virtual R _invoke(Args&&...) = 0;
+};
+
+template <class R, class... Args>
+template <class F>
+struct task<R(Args...)>::model final : concept {
+    template <class G>
+    model(G&& f) : _f(forward<G>(f)) {}
+    R _invoke(Args&&... args) override { return invoke(_f, forward<Args>(args)...); }
+
+    F _f;
+};
+
+//...
+
+int main() {
+    task<unique_ptr<int>()> f = [_p = make_unique<int>(42)]() mutable { return move(_p); };
+
+    cout << *f() << endl;
+}
+
+#endif
+
+#if 0
+#include <functional>
+#include <iostream>
+#include <memory>
+
+using namespace std;
+
+template <class>
+class task;
+
+template <class R, class... Args>
+class task<R(Args...)> {
+    struct concept {
+        virtual ~concept() = default;
+        virtual R _invoke(Args&&...) = 0;
+#if 0 && 3
+#else
+        virtual void _move(void*) = 0;
+#endif
+    };
+
+#if 0 && 5
+    template <class F>
+    struct model final : concept {
+#else
+    template <class F, bool Small>
+    struct model;
+    
+    template <class F>
+    struct model<F, true> final : concept {
+#endif
+        template <class G>
+        model(G&& f) : _f(forward<G>(f)) {}
+        R _invoke(Args&&... args) override { return invoke(_f, forward<Args>(args)...); }
+#if 0 && 4
+#else
+        void _move(void* p) override { new (p) model(move(*this)); }
+#endif
+
+        F _f;
+    };
+    
+#if 0 && 6
+#else
+    template <class F>
+    struct model<F, false> final : concept {
+        template <class G>
+        model(G&& f) : _p(make_unique<F>(forward<G>(f))) {}
+        R _invoke(Args&&... args) override { return invoke(*_p, forward<Args>(args)...); }
+        void _move(void* p) override { new (p) model(move(*this)); }
+
+        unique_ptr<F> _p;
+    };
+#endif
+
+#if 0 && 1
+    unique_ptr<concept> _p;
+    concept& self() { return *_p; }
+#else
+
+    static constexpr size_t small_size = 16; // Use expression here for what you want to fit
+    aligned_storage_t<small_size> _data;
+
+    concept& self() { return *static_cast<concept*>(static_cast<void*>(&_data)); }
+
+#endif
+
+public:
+    template <class F>
+#if 0 && 2
+    task(F&& f) : _p(make_unique<model<decay_t<F>>>(forward<F>(f))) { }
+#else
+    task(F&& f) {
+#if 0 && 7
+        new (&_data) model<decay_t<F>>(forward<F>(f));
+#else
+        constexpr bool is_small = sizeof(model<decay_t<F>, true>);
+        new (&_data) model<decay_t<F>, is_small>(forward<F>(f));
+#endif
+    }
+    ~task() { self().~concept(); }
+
+    task(task&& x) noexcept { x.self()._move(&_data); }
+    task& operator=(task&& x) noexcept {
+        self().~concept();
+        x.self()._move(&_data);
+        return *this;
+    }
+#endif
+
+    R operator()(Args... args) {
+        return self()._invoke(forward<Args>(args)...);
+    }
+};
+
+//...
+
+int main() {
+    task<unique_ptr<int>()> f = [_p = make_unique<int>(42)]() mutable { return move(_p); };
+
+    cout << *f() << endl;
+}
+
+#endif
+#if 0
+
+#include <functional>
+#include <cassert>
+#include <utility>
+#include <algorithm>
+#include <numeric>
+#include <iostream>
+
+#include <boost/icl/interval_set.hpp>
+
+template <class I, class P>
+auto stable_partition_position(I f, I l, P p) -> I {
+    auto n = l - f;
+    if (n == 0) return f;
+    if (n == 1) return f + p(f);
+
+    auto m = f + (n / 2);
+
+    return std::rotate(stable_partition_position(f, m, p), m, stable_partition_position(m, l, p));
+}
+
+template <class I, class S>
+auto gather_position(I f, I l, I p, S s) -> std::pair<I, I> {
+    return {stable_partition_position(f, p, [&](const auto& x){ return !s(x); }),
+            stable_partition_position(p, l, s)};
+}
+
+int main() {
+    int a[10];
+    std::iota(std::begin(a), std::end(a), 0);
+    
+    boost::icl::interval_set<int*> selection;
+    
+    selection += boost::icl::interval<int*>::type(std::begin(a) + 3, std::begin(a) + 5);
+    
+    //...
+    
+    gather_position(std::begin(a), std::end(a), std::begin(a) + 7, [&](auto p){
+       return contains(selection, p);
+    });
+    
+    for (const auto& e : a) std::cout << e << std::endl;
 }
 
 #endif
