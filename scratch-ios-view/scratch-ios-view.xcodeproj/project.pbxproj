@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		9AE2146E1A1BD0F300CD599A /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 9AE2146D1A1BD0F300CD599A /* main.m */; };
+		9AE2146E1A1BD0F300CD599A /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9AE2146D1A1BD0F300CD599A /* main.mm */; };
 		9AE214711A1BD0F300CD599A /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 9AE214701A1BD0F300CD599A /* AppDelegate.m */; };
 		9AE214741A1BD0F300CD599A /* ViewController.mm in Sources */ = {isa = PBXBuildFile; fileRef = 9AE214731A1BD0F300CD599A /* ViewController.mm */; };
 		9AE214771A1BD0F300CD599A /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9AE214751A1BD0F300CD599A /* Main.storyboard */; };
@@ -30,7 +30,7 @@
 		9A0F16F01F4632DD004621AD /* functional.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = functional.cpp; path = ../../../stlab/libraries/stlab/functional.cpp; sourceTree = "<group>"; };
 		9AE214681A1BD0F300CD599A /* scratch-ios-view.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "scratch-ios-view.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9AE2146C1A1BD0F300CD599A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		9AE2146D1A1BD0F300CD599A /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		9AE2146D1A1BD0F300CD599A /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		9AE2146F1A1BD0F300CD599A /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		9AE214701A1BD0F300CD599A /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
 		9AE214721A1BD0F300CD599A /* ViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ViewController.h; sourceTree = "<group>"; };
@@ -99,7 +99,7 @@
 			isa = PBXGroup;
 			children = (
 				9AE2146C1A1BD0F300CD599A /* Info.plist */,
-				9AE2146D1A1BD0F300CD599A /* main.m */,
+				9AE2146D1A1BD0F300CD599A /* main.mm */,
 			);
 			name = "Supporting Files";
 			sourceTree = "<group>";
@@ -223,7 +223,7 @@
 			files = (
 				9AE214741A1BD0F300CD599A /* ViewController.mm in Sources */,
 				9AE214711A1BD0F300CD599A /* AppDelegate.m in Sources */,
-				9AE2146E1A1BD0F300CD599A /* main.m in Sources */,
+				9AE2146E1A1BD0F300CD599A /* main.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

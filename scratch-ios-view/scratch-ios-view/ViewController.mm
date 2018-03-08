@@ -7,6 +7,7 @@
 //
 
 #import "ViewController.h"
+#include <stdexcept>
 
 @interface ViewController ()
 
@@ -76,6 +77,7 @@
 
 - (IBAction)switchChanged1:(UISwitch*)sender {
     self.value1 = sender.on;
+    throw std::runtime_error("");
 }
 
 @end

@@ -1,3 +1,1123 @@
+#include <iostream>
+
+#include <dispatch/dispatch.h>
+
+using namespace std;
+
+int main() {
+    dispatch_async_f(dispatch_get_main_queue(), [](void* p){
+
+    });
+
+    dispatch_main();
+}
+
+#if 0
+
+#include <cstddef>
+#include <tuple>
+#include <type_traits>
+
+template <std::size_t N>
+class agf_vector {
+    float _array[N];
+
+public:
+    agf_vector() = default;
+    #if 0
+    template <class... Args,
+              class = std::enable_if_t<(sizeof...(Args) == 4) &&
+                                       (std::is_convertible_v<Args, float> && ...)>>
+    agf_vector(Args&&... args) : _array{std::forward<Args>(args)...} {}
+    #endif
+
+    agf_vector(float a) : _array{a} {
+        static_assert(N == 1, "");
+    }
+    agf_vector(float a, float b) : _array{a, b} {
+        static_assert(N == 2, "");
+    }
+    agf_vector(float a, float b, float c) : _array{a, b, c} {
+        static_assert(N == 3, "");
+    }
+    agf_vector(float a, float b, float c, float d) : _array{a, b, c, d} {
+        static_assert(N == 4, "");
+    }
+};
+
+int main() {
+    agf_vector<4> x(1.0f, 1.0f, 1.0f, 1.0f);
+    // agf_vector<4> y(1.0f, 1.0f); // ERROR
+}
+
+#endif
+
+#if 0
+
+#include <cstdlib>
+#include <iostream>
+#include <string>
+#include <typeinfo>
+#include <set>
+
+#include <cxxabi.h>
+
+template <class T>
+void type_name() {
+    typedef typename std::remove_reference<T>::type TR;
+    std::unique_ptr<char, void (*)(void*)> own(
+        abi::__cxa_demangle(typeid(TR).name(), nullptr, nullptr, nullptr), std::free);
+    std::string r = own != nullptr ? own.get() : typeid(TR).name();
+    if (std::is_const<TR>::value) r += " const";
+    if (std::is_volatile<TR>::value) r += " volatile";
+    if (std::is_lvalue_reference<T>::value)
+        r += "&";
+    else if (std::is_rvalue_reference<T>::value)
+        r += "&&";
+
+    std::cout << r << '\n';
+}
+
+struct annotate {
+    annotate() { std::cout << "annotate ctor" << std::endl; }
+    annotate(const annotate&) { std::cout << "annotate copy-ctor" << std::endl; }
+    annotate(annotate&&) noexcept { std::cout << "annotate move-ctor" << std::endl; }
+    annotate& operator=(const annotate&) {
+        std::cout << "annotate assign" << std::endl;
+        return *this;
+    }
+    annotate& operator=(annotate&&) noexcept {
+        std::cout << "annotate move-assign" << std::endl;
+        return *this;
+    }
+    ~annotate() { std::cout << "annotate dtor" << std::endl; }
+    friend inline void swap(annotate&, annotate&) { std::cout << "annotate swap" << std::endl; }
+    friend inline bool operator==(const annotate&, const annotate&) { return true; }
+    friend inline bool operator!=(const annotate&, const annotate&) { return false; }
+};
+
+using namespace std;
+
+struct lambda_member {
+    size_t _count = 0;
+
+    function<void(const string&)> _lambda = [_n = _count](const auto& x) {
+        for(auto n = _n; n != 0; --n) cout << x << '\n';
+    };
+};
+
+struct employee {
+    string name;
+    int id;
+};
+
+template <class Key, class Compare>
+set<Key, Compare> make_set(Compare&& compare) {
+    return set<Key, Compare>(forward<Compare>(compare));
+}
+
+int main() {
+
+auto set = make_set
+
+
+lambda_member object{5};
+
+object._lambda("Hello");
+
+object._lambda = [](const auto& x) {
+    cout << "I heard you the first time." << '\n';
+    cout << x << '\n';
+};
+
+object._lambda("World!");
+
+#if 0
+auto [x, y] = make_pair(annotate(), annotate());
+type_name<decltype(x)>();
+// cout << last_name << ", " << first_name << '\n';
+
+auto [first_name, last_name] = make_pair("Jane"s, "Smith"s);
+cout << last_name << ", " << first_name << '\n';
+#endif
+#if 1
+    int a = 1, b = 2;
+    const auto& [x, y] = tie(a, b);
+
+    a = 42;
+    cout << x << endl;
+    type_name<decltype(x)>();
+#elif 0
+    int a[] = { 0, 3, 4, 5, 5, 5, 6, 6, 7 };
+
+    pair<int*, int*> result = equal_range(begin(a), end(a), 5);
+    for (; result.first != result.second; ++result.first) {
+        cout << *result.first << '\n';
+    }
+
+#elif 0
+    int* f; int* l;
+    tie(f, l) = equal_range(begin(a), end(a), 5);
+    for(; f != l; ++f) {
+        cout << *f << '\n';
+    }
+#else
+    for(auto [f, l] = equal_range(begin(a), end(a), 5); f != l; ++f) {
+        cout << *f << '\n';
+    }
+    #endif
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <type_traits>
+
+using namespace std;
+
+#if 0
+template <auto N>
+struct integral_constant_t {
+      static constexpr decltype(N) value = N;
+};
+#endif
+
+template <auto N>
+using integral_constant_t = std::integral_constant<decltype(N), N>;
+
+using true_t = integral_constant_t<true>;
+
+int main() {
+
+    cout << boolalpha << true_t::value << endl;
+
+}
+#endif
+
+#if 0
+
+#include <functional>
+#include <iostream>
+
+using namespace std;
+
+template <char> struct char_to_operation_t;
+template <> struct char_to_operation_t<'+'> { using type = plus<>; };
+template <> struct char_to_operation_t<'-'> { using type = minus<>; };
+template <> struct char_to_operation_t<'*'> { using type = multiplies<>; };
+template <> struct char_to_operation_t<'/'> { using type = divides<>; };
+
+template <char c> using char_to_operation = typename char_to_operation_t<c>::type;
+
+int main() {
+    cout << char_to_operation<'+'>()(100, 100) << "\n";
+    cout << char_to_operation<'-'>()(110, 100) << "\n";
+    cout << char_to_operation<'*'>()(2, 100) << "\n";
+    cout << char_to_operation<'/'>()(500, 100) << "\n";
+
+    // works with other type also
+    cout << char_to_operation<'+'>()(12.2, 14.7) << "\n";
+}
+
+#endif
+
+#if 0
+#define ALLOWED(item)        using TDrawingContextOnly :: item
+
+class TDrawingContextOnly {
+public:
+    void test();
+};
+
+class derived : TDrawingContextOnly {
+    ALLOWED(test);
+};
+
+#endif
+
+#if 0
+
+#include <utility>
+#include <functional>
+#include <string>
+#include <iostream>
+#include <tuple>
+
+using namespace std;
+
+struct root_extension_t {
+    string root;
+    string extension;
+};
+
+auto root_extension(const string& in) -> root_extension_t {
+    auto p = in.find_last_of('.');
+    if (p == string::npos) p = in.size();
+    return { in.substr(0, p), in.substr(p, in.size() - p) };
+}
+
+
+int main() {
+    string r;
+    string e;
+    tie(r, e) = root_extension("volume/directory/file.jpg");
+    auto [root, extension] = root_extension("volume/directory/file.jpg");
+    cout << root << ":" << extension << endl;
+}
+
+#endif
+
+#if 0
+
+#include <functional>
+
+// UPopup.cpp
+
+std::function<void(int rsrcID, int selection )> _notify_value_change; // set by apollo
+
+// property_panels.cpp
+template <int RsrcID>
+struct bridge_menu_helper {
+    auto operator()(int selection) const { return 0; }
+};
+
+template <int RsrcID>
+auto bridge_menu(int selection) {
+    return bridge_menu_helper<RsrcID>()(selection);
+}
+
+enum class channel {
+    bitmap = 0
+};
+
+template <>
+struct bridge_menu_helper<1> {
+    auto operator()(int selection) const {
+        return channel::bitmap;
+    }
+};
+
+enum class different_apollo_enum_type {
+    value = 0
+};
+
+
+template <>
+struct bridge_menu_helper<2> {
+    auto operator()(int selection) const {
+        return different_apollo_enum_type::value;
+    }
+};
+
+
+
+// Later...
+
+#if 0
+template <typename BindData>
+void ps_bind(BindData bind_data) {
+
+    _notify_value_change = [_bind_data = bind_data](int rsrcID, auto&&... args) {
+        apollo::invoke([_bind_data, rsrcID](auto&&... args) {
+            if (auto property = _bind_data._tracked.lock()) {
+                setter::set(*property, detail::bridge_menu<rsrcID>(std::forward<decltype(args)>(args)...));
+            }
+        }, std::forward<decltype(args)>(args)...);
+    };
+}
+#endif
+
+int main() {
+    bridge_menu<1>(0);
+    bridge_menu<2>(0);
+}
+
+#endif
+
+
+#if 0
+struct point {
+    int _width;
+    int _height;
+
+    constexpr point(int w, int h) : _width(w), _height(h) { }
+};
+
+constexpr bool operator==(const point& a, const point& b) {
+    return (a._width == b._width) && (a._height == b._height);
+}
+
+constexpr point origin = { 10, 10 };
+static_assert(origin == point(10, 10));
+
+int main() { }
+#endif
+
+#if 0
+
+#include "header.hpp"
+#include <iostream>
+
+using namespace std;
+
+const void* local_address();
+
+int main() {
+    cout << &variable << endl;
+    cout << local_address() << endl;
+};
+
+#endif
+
+#if 0
+
+#include <cstdint>
+#include <cstddef>
+#include <iterator>
+
+using namespace std;
+
+constexpr std::uint64_t fnv64_hash_str(const char* p) {
+    std::uint64_t hash = UINT64_C(14695981039346656037);
+    while (*p) {
+        hash *= UINT64_C(1099511628211);
+        hash ^= *p;
+        ++p;
+    }
+    return hash;
+}
+
+int strCmp(const char* s1, const char* s2)
+{
+    while(*s1 && (*s1 == *s2))
+    {
+        s1++;
+        s2++;
+    }
+    return *(const unsigned char*)s1 - *(const unsigned char*)s2;
+}
+
+constexpr bool cstrless(const char* a, const char* b) {
+    while (*a && (*a == *b)) {
+        ++a;
+        ++b;
+    }
+    return static_cast<unsigned char>(*a) < static_cast<unsigned char>(*b);
+}
+
+template <class T, std::size_t N>
+struct carray {
+    T _data[N];
+
+    constexpr const T& operator[](std::size_t n) const { return _data[n]; }
+    constexpr T& operator[](std::size_t n) { return _data[n]; }
+};
+
+template <class T, std::size_t N>
+constexpr auto begin(const carray<T, N>& x) {
+    return &x._data[0];
+}
+
+template <class T, std::size_t N>
+constexpr auto end(const carray<T, N>& x) {
+    return &x._data[0] + N;
+}
+
+template <class I, size_t N>
+struct span {
+    I _f;
+};
+
+template <class I, size_t N>
+constexpr auto begin(const span<I, N>& x) {
+    return x._f;
+}
+
+template <class I, size_t N>
+constexpr auto end(const span<I, N>& x) {
+    return begin(x) + N;
+}
+
+#if 0
+template <class I, size_t N, size_t M, class Comp>
+constexpr auto merge(const span<I, N>& a, const span<I, M>& b, Comp comp) {
+    carray<const char*, N + M> result{0};
+    std::size_t i = 0;
+    auto f1 = begin(a);
+    auto l1 = end(a);
+    auto f2 = begin(b);
+    auto l2 = end(b);
+
+    while (f1 != l1 && f2 != l2) {
+        if (comp(*f1, *f2)) {
+            result[i] = *f1++;
+        } else {
+            result[i] = *f2++;
+        }
+        ++i;
+    }
+    while (f1 != l1) {
+        result[i] = *f1++;
+        ++i;
+    }
+    while (f2 != l2) {
+        result[i] = *f2++;
+        ++i;
+    }
+    return result;
+}
+#endif
+
+template <class T, size_t N, size_t M, class Comp>
+constexpr auto merge(const carray<T, N>& a, const carray<T, M>& b, Comp comp) {
+    carray<const char*, N + M> result{0};
+    size_t i = 0, j = 0, k = 0;
+    while (j != N && k != M) {
+        if (comp(a[j], b[k])) {
+            result[i] = a[j];
+            ++j;
+        } else {
+            result[i] = b[k];
+            ++k;
+        }
+        ++i;
+    }
+    while (j != N) {
+        result[i] = a[j];
+        ++j;
+        ++i;
+    }
+    while (k != M) {
+        result[i] = b[k];
+        ++k;
+        ++i;
+    }
+    return result;
+}
+
+#if 1
+template <class I, class Comp>
+constexpr auto merge_sort(const span<I, 1>& a, Comp comp) {
+    return carray<typename iterator_traits<decltype(begin(a))>::value_type, 1>{*begin(a)};
+}
+
+template <class I, size_t N, class Comp>
+constexpr auto merge_sort(const span<I, N>& a, Comp comp) {
+    return merge(merge_sort(span<I, N / 2>{begin(a)}, comp),
+        merge_sort(span<I, N - N / 2>{begin(a) + N / 2}, comp), comp);
+}
+#endif
+
+
+#if 0
+template <class I, size_t N, class Comp>
+constexpr auto merge_sort(const span<I, N>& a, Comp comp) {
+    if constexpr (N == 1)
+        return carray<typename iterator_traits<decltype(begin(a))>::value_type, 1>{*begin(a)};
+    else
+        return merge(merge_sort(span<I, N / 2>{begin(a)}, comp),
+                     merge_sort(span<I, N - N / 2>{begin(a) + N / 2}, comp), comp);
+}
+#endif
+
+template <class T, std::size_t N>
+constexpr auto to_array(const T (&a)[N]) {
+    carray<T, N> result{0};
+    for (std::size_t i = 0; i != N; ++i) result[i] = a[i];
+    return result;
+}
+
+template <class I>
+constexpr bool cis_sorted(I f, I l) {
+    if (f != l) {
+        I next = f;
+        while (++next != l) {
+            if (cstrcmp(*next, *f) < 0)
+                return false;
+            f = next;
+        }
+    }
+    return true;
+}
+
+#include <iostream>
+
+using namespace std;
+
+int main () {
+constexpr const char* names[]{"Carole",    "Cherelle", "Elene",    "Ahmad",  "Janae",
+                              "Stephenie", "Bill",     "Joannie",  "Taylor", "Sharice",
+                              "Myrtle",    "Dara",     "Manuel",   "Hayley", "Odis",
+                              "Otto",      "Goldie",   "Stepanie", "Nicky",  "Ashley"};
+
+constexpr auto sorted =
+    merge_sort(span<decltype(begin(names)), end(names) - begin(names)>{begin(names)}, cstrless);
+
+for (const auto& e : sorted)
+    cout << e << endl;
+
+    // auto [x, y] = std::make_pair(10, 20);
+
+    //cout << hash << endl;
+}
+
+#endif
+
+#if 0
+
+// Example of accessing condition variable after it dies.
+
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
+using namespace std;
+
+void f() {
+    mutex m;
+    condition_variable cond;
+    bool flag{0};
+
+    thread([&] {
+        // do stuff
+        {
+            unique_lock<mutex> lock{m};
+            flag = true;
+        }
+        cond.notify_one();
+    }).detach();
+
+    // do other stuff
+
+    {
+        unique_lock<mutex> lock{m};
+        while (!flag)
+            cond.wait(lock);
+    }
+    // done
+}
+
+#endif
+
+#if 0
+
+#include <iostream>
+#include <thread>
+#include <stlab/concurrency/concurrency.hpp>
+using namespace std;
+using namespace stlab;
+
+int main() {
+    std::vector<future<int>> allFutures;
+    auto &the_executor = default_executor;
+    for(int i = 0; i < 32; ++i)
+        allFutures.push_back(async(the_executor, [](int i) {
+            for(int j = 0; j < 16'000'000; ++j)
+                i *= (2*j+1);
+            // std::cout << "Got " << i << std::endl;
+            return i;
+        }, i));
+    for(auto &f : allFutures)
+        std::cout << "R: " << blocking_get(f) << std::endl;
+        return 0;
+}
+
+#endif
+
+
+#if 0
+
+#include <adobe/enum_ops.hpp>
+#include <iostream>
+
+using namespace std;
+
+enum class layer_index : int { };
+auto stlab_enable_arithmetic_enum(layer_index) -> std::true_type;
+
+int main() {
+
+    layer_index x{5};
+    layer_index y{3};
+
+    std::cout << static_cast<int>(x * 3) << std::endl;
+    std::cout << static_cast<int>(3 * x) << std::endl;
+    // std::cout << static_cast<int>(x * y) << std::endl;
+
+    y *= 10;
+}
+
+#endif
+
+#if 0
+
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <type_traits>
+
+using namespace std;
+
+template <class>
+class task;
+
+template <class R, class... Args>
+class task<R(Args...)> {
+    struct concept;
+
+    template <class F, bool Small>
+    struct model;
+    static constexpr size_t small_size = sizeof(void*) * 4;
+
+    static constexpr concept empty{[](void*) noexcept {}};
+
+    const concept* _concept = &empty;
+    aligned_storage_t<small_size> _model;
+
+public:
+    template <class F>
+    task(F&& f) {
+        constexpr bool is_small = sizeof(model<decay_t<F>, true>) <= small_size;
+        new (&_model) model<decay_t<F>, is_small>(forward<F>(f));
+        _concept = &model<decay_t<F>, is_small>::vtable;
+    }
+
+    ~task() { _concept->_dtor(&_model); }
+
+    task(task&& x) noexcept : _concept(x._concept) { _concept->_move(&x._model, &_model); }
+    task& operator=(task&& x) noexcept {
+        if (this == &x) return *this;
+        _concept->_dtor(&_model);
+        _concept = x._concept;
+        _concept->_move(&x._model, &_model);
+        return *this;
+    }
+    R operator()(Args... args) { return _concept->_invoke(&_model, forward<Args>(args)...); }
+};
+
+template <class R, class... Args>
+struct task<R(Args...)>::concept {
+    void (*_dtor)(void*) noexcept;
+    void (*_move)(void*, void*) noexcept;
+    R (*_invoke)(void*, Args&&...);
+};
+
+template <class R, class... Args>
+template <class F>
+struct task<R(Args...)>::model<F, true> {
+    template <class G>
+    model(G&& f) : _f(forward<G>(f)) {}
+
+    static void _dtor(void* self) noexcept { static_cast<model*>(self)->~model(); }
+    static void _move(void* self, void* p) noexcept {
+        new (p) model(move(*static_cast<model*>(self)));
+    }
+    static R _invoke(void* self, Args&&... args) {
+        return invoke(static_cast<model*>(self)->_f, forward<Args>(args)...);
+    }
+
+    static constexpr concept vtable{_dtor, _move, _invoke};
+
+    F _f;
+};
+
+template <class R, class... Args>
+template <class F>
+struct task<R(Args...)>::model<F, false> {
+    template <class G>
+    model(G&& f) : _p(make_unique<F>(forward<F>(f))) {}
+
+    static void _dtor(void* self) noexcept { static_cast<model*>(self)->~model(); }
+    static void _move(void* self, void* p) noexcept {
+        new (p) model(move(*static_cast<model*>(self)));
+    }
+    static R _invoke(void* self, Args&&... args) {
+        return invoke(*static_cast<model*>(self)->_p, forward<Args>(args)...);
+    }
+
+    static constexpr concept vtable{_dtor, _move, _invoke};
+
+    unique_ptr<F> _p;
+};
+
+int main() {
+    task<unique_ptr<int>()> f = [_p = make_unique<int>(42)]() mutable { return move(_p); };
+    cout << *f() << endl;
+}
+
+#endif
+
+#if 0
+// Original Code
+
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <type_traits>
+
+using namespace std;
+
+template <class>
+class task;
+
+template <class R, class... Args>
+class task<R(Args...)> {
+    struct concept;
+
+    template <class F, bool Small>
+    struct model;
+    static constexpr size_t small_size = sizeof(void*) * 4;
+    aligned_storage_t<small_size> _data;
+    concept& self() { return *static_cast<concept*>(static_cast<void*>(&_data)); }
+
+public:
+    template <class F>
+    task(F&& f) {
+        constexpr bool is_small = sizeof(model<decay_t<F>, true>) <= small_size;
+        new (&_data) model<decay_t<F>, is_small>(forward<F>(f));
+    }
+
+    ~task() { self().~concept(); }
+
+    task(task&& x) noexcept { x.self()._move(&_data); }
+    task& operator=(task&& x) noexcept {
+        self().~concept();
+        x.self()._move(&_data);
+        return *this;
+    }
+    R operator()(Args... args) { return self()._invoke(forward<Args>(args)...); }
+};
+
+template <class R, class... Args>
+struct task<R(Args...)>::concept {
+    virtual ~concept() = default;
+    virtual R _invoke(Args&&...) = 0;
+    virtual void _move(void*) = 0;
+};
+
+template <class R, class... Args>
+template <class F>
+struct task<R(Args...)>::model<F, true> final : concept {
+    template <class G>
+    model(G&& f) : _f(forward<G>(f)) {}
+    R _invoke(Args&&... args) override { return invoke(_f, forward<Args>(args)...); }
+    void _move(void* p) override { new (p) model(move(*this)); }
+    F _f;
+};
+
+template <class R, class... Args>
+template <class F>
+struct task<R(Args...)>::model<F, false> final : concept {
+    template <class G>
+    model(G&& f) : _p(make_unique<F>(forward<F>(f))) {}
+    R _invoke(Args&&... args) override { return invoke(*_p, forward<Args>(args)...); }
+    void _move(void* p) override { new (p) model(move(*this)); }
+    unique_ptr<F> _p;
+};
+
+int main() {
+    task<unique_ptr<int>()> f = [_p = make_unique<int>(42)]() mutable { return move(_p); };
+    cout << *f() << endl;
+}
+
+#endif
+
+#if 0
+
+#include <stlab/test/model.hpp>
+#include <stlab/concurrency/task.hpp>
+#include <iostream>
+
+class any {
+    struct vtable {
+        void (*dtor)(void*) { };
+    };
+
+    template <class F>
+    struct model {
+        template <class G>
+        model(G&& f) : _f(std::forward<G>(f)) { }
+
+        F _f;
+
+        constexpr static vtable vtable = {
+            [](void* self){ static_cast<model*>(self)->~model(); } // dtor
+        };
+    };
+
+    struct concept {
+        const vtable* _vtable_ptr = nullptr;
+        std::aligned_storage_t<256 - sizeof(vtable*)> _model;
+
+        template <class T>
+        concept(T&& x) {
+            new (&_model) model<T>(std::forward<std::decay_t<T>>(x));
+            _vtable_ptr = &model<T>::vtable;
+        }
+        ~concept() { _vtable_ptr->dtor(&_model); }
+    };
+
+    concept _object;
+public:
+    template <class T>
+    any(T&& x) : _object(std::forward<T>(x)) { }
+};
+
+using namespace stlab;
+using namespace std;
+
+
+int main() {
+    annotate_counters counters;
+    {
+        any(annotate(counters));
+        task<void()> f = [_a = annotate(counters)] { cout << "Hello World" << endl; };
+        f();
+    }
+    cout << counters << endl;
+
+
+}
+
+#endif
+
+#if 0
+
+#include <algorithm>
+#include <iostream>
+#include <numeric>
+#include "junk/junk1.hpp"
+
+using namespace std;
+
+template <typename Iter>
+bool is_dearrangement(Iter first, Iter last) {
+    return std::adjacent_find(first, last,
+                              [](const auto& x, const auto& y) { return (x + 1) != y; }) == last;
+}
+
+int main() {
+    int a[100];
+
+    if (int x = 27; x) cout << "true" << endl;
+    iota(begin(a), end(a), 0);
+    //a[50] = 0; // dearrange
+
+    cout << adjacent_find(begin(a), end(a),
+                          [](const auto& x, const auto& y) { return (x + 1) != y; }) -
+                begin(a)
+         << endl;
+}
+
+#endif
+
+#if 0
+#include <adobe/forest.hpp>
+#include <adobe/closed_hash.hpp>
+
+#include <boost/optional.hpp>
+
+#include <iterator>
+
+template <class I, class O>
+void for_each_child_range(I first, I last, O op) {
+    using difference_t = typename std::iterator_traits<I>::difference_type;
+    difference_t stack_depth = 0;
+
+    boost::iterator_range<I> found(first, first);
+
+    while (first != last) {
+        auto next = std::next(first);
+
+        if (first.edge() == adobe::forest_leading_edge) {
+            ++stack_depth;
+        } else if (0 < stack_depth) {
+            auto leading = adobe::leading_of(first);
+
+            if (found.end() == leading) { // joined
+                found = boost::make_iterator_range(found.begin(), next);
+            } else {
+                if ((found.end() != first) && !found.empty()) {
+                    op(boost::make_iterator_range(
+                        adobe::child_iterator<I>(found.begin()),
+                        adobe::child_iterator<I>(found.end()))); // disjoint
+                }
+                found = boost::make_iterator_range(leading, next); // subsumed or disjoint
+            }
+
+            --stack_depth;
+        }
+
+        // a trailing edge with a stack depth of 0 indicates no corresponding leading edge.
+
+        first = next; // op can invalidate first so we can't increment it here.
+    }
+
+    if (!found.empty())
+        op(boost::make_iterator_range(adobe::child_iterator<I>(found.begin()),
+                                      adobe::child_iterator<I>(found.end())));
+}
+
+#include <iostream>
+
+using namespace adobe;
+using namespace std;
+
+int main() {
+    forest<string> x;
+
+    auto a = x.insert(end(x), "A");
+    ++a;
+    auto l = x.insert(end(x), "E");
+    ++l; ++l;
+
+    auto f = x.insert(a, "B");
+    x.insert(a, "C");
+    x.insert(a, "D");
+
+    auto r = depth_range(x);
+    for (auto f = begin(r), l = end(r); f != l; ++f) {
+        cout << string(f.depth() * 4, ' ') << (f.edge() ? "<" : "</") << *f << ">\n";
+    }
+
+    forest<string> tmp;
+
+    for_each_child_range(f, l, [&](const auto& a){
+        tmp.splice(tmp.end(), x, a.begin(), a.end());
+    });
+
+    cout << "----" << endl;
+    {
+        auto r = depth_range(tmp);
+        for (auto f = begin(r), l = end(r); f != l; ++f) {
+            cout << string(f.depth() * 4, ' ') << (f.edge() ? "<" : "</") << *f << ">\n";
+        }
+    }
+
+
+    cout << "----" << endl;
+    {
+        auto r = depth_range(x);
+        for (auto f = begin(r), l = end(r); f != l; ++f) {
+            cout << string(f.depth() * 4, ' ') << (f.edge() ? "<" : "</") << *f << ">\n";
+        }
+    }
+}
+#endif
+
+#if 0
+
+#include <algorithm>
+#include <iostream>
+
+#include <future>
+#include <experimental/coroutine>
+
+using namespace std;
+
+constexpr auto l = [](){ return 10; };
+
+future<int> async_fib(int n)
+{
+    if (n <= 2)
+        co_return 1;
+
+    int a = 1;
+    int b = 1;
+
+    // iterate computing fib(n)
+    for (int i = 0; i < n - 2; ++i)
+    {
+        int c = co_await async_add(a, b);
+        a = b;
+        b = c;
+    }
+
+    co_return b;
+}
+
+
+int main() {
+    std::cout << l() << std::endl;
+}
+
+#endif
+#if 0
+template <class I>
+void nth_element_stable(I f, I n, I l) {
+    while (f != l) {
+        auto cut = stable_partition(f, l, median3
+    }
+}
+#endif
+
+#if 0
+#include <algorithm>
+
+class image {};
+
+enum class raw_ptr : intptr_t { };
+
+image* operator*(raw_ptr x);
+
+raw_ptr operator|(const raw_ptr a, const raw_ptr (*f)(raw_ptr)) { return static_cast<intptr_t>(a) ? f(a) : static_cast<raw_ptr>(0); }
+
+const raw_ptr crop_to_cat(raw_ptr);
+const raw_ptr add_bow_tie(raw_ptr);
+
+int main() {
+    image x;
+    auto p = crop_to_cat(static_cast<raw_ptr>(reinterpret_cast<intptr_t>(&x))) | add_bow_tie;
+}
+#endif
+
+#if 0
+
+#include <apollo/interval_set.hpp>
+
+#include <cstddef>
+#include <vector>
+#include <utility>
+#include <iostream>
+
+using namespace apollo;
+using namespace std;
+
+template <class I, class Proj, class Pred>
+auto make_interval_set_from(I f, I l, Proj proj, Pred pred) {
+    using key_type = result_of_t<Proj(I)>;
+    bool inside = false;
+    vector<key_type> buffer;
+    while (f != l) {
+        if (pred(f) != inside) {
+            buffer.push_back(proj(f));
+            inside = !inside;
+        }
+        ++f;
+    }
+    return interval_set<key_type>(move(buffer));
+}
+
+int main() {
+    struct layer {
+        bool is_selected;
+    } layers[] = { false, true, false, true, true , true, false };
+
+    auto set = make_interval_set_from(begin(layers), end(layers), [&](auto i) -> size_t {
+        return i - begin(layers);
+    }, [](auto i){ return i->is_selected; });
+
+    set.for_each_segment(0, sizeof(layers), [](auto f, auto l) {
+        cout << f << ", " << l << endl;
+    });
+}
+
+#endif
+
+#if 0
+
 #include <functional>
 #include <cassert>
 
@@ -21,6 +1141,8 @@ int main() {
     int x = 5;
     some_type foo{[_x = x](int a){ return a + _x; }};
 }
+
+#endif
 
 #if 0
 #include <iostream>

@@ -15,6 +15,7 @@
 		9A50E51E1F45606B0010006C /* libadobe_source.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A551F0619116E7E00C388E5 /* libadobe_source.a */; };
 		9A50E5211F4560920010006C /* libadobe_source.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A551F0619116E7E00C388E5 /* libadobe_source.a */; };
 		9A729E001EEA524F0015B7EB /* scratch_test.m in Sources */ = {isa = PBXBuildFile; fileRef = 9A729DFF1EEA524F0015B7EB /* scratch_test.m */; };
+		9ABE7AA6200EB8CA00CF93AE /* code.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9ABE7AA4200EB8CA00CF93AE /* code.cpp */; };
 		9ACAF6151F8DDF1700F5C207 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9AAE19E116F81487007BC561 /* main.cpp */; };
 		9ADF796C1F54DEA5002521B2 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9ADF796B1F54DEA5002521B2 /* AppKit.framework */; };
 /* End PBXBuildFile section */
@@ -103,6 +104,8 @@
 		9AAE19E116F81487007BC561 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		9ABA64E81A05A77700E6E8E6 /* View.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = View.xib; sourceTree = "<group>"; };
 		9ABAFE9F18D1696A00652166 /* objc.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = objc.mm; sourceTree = "<group>"; };
+		9ABE7AA4200EB8CA00CF93AE /* code.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = code.cpp; sourceTree = "<group>"; };
+		9ABE7AA7200EB8EC00CF93AE /* header.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = header.hpp; sourceTree = "<group>"; };
 		9ACCBBE31A971B3D00207431 /* source */ = {isa = PBXFileReference; lastKnownFileType = folder; path = source; sourceTree = "<group>"; };
 		9ACCBBE41A971B9800207431 /* config.hpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; name = config.hpp; path = ../config.hpp; sourceTree = "<group>"; };
 		9ACCBBE71A971C8D00207431 /* future.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = future.cpp; path = source/boost/thread/src/future.cpp; sourceTree = "<group>"; };
@@ -260,12 +263,14 @@
 		9AAE19E016F81487007BC561 /* scratch */ = {
 			isa = PBXGroup;
 			children = (
-				9A729DF01EEA47C50015B7EB /* serial_queue_test.cpp */,
-				9A97D6F61EF0D7E60058DF40 /* cow_test.cpp */,
+				9ABE7AA4200EB8CA00CF93AE /* code.cpp */,
 				9ACCBBE41A971B9800207431 /* config.hpp */,
+				9A97D6F61EF0D7E60058DF40 /* cow_test.cpp */,
+				9ABE7AA7200EB8EC00CF93AE /* header.hpp */,
 				9AAE19E116F81487007BC561 /* main.cpp */,
 				9ADF79691F54DCD6002521B2 /* main.hpp */,
 				9ABAFE9F18D1696A00652166 /* objc.mm */,
+				9A729DF01EEA47C50015B7EB /* serial_queue_test.cpp */,
 				9ABA64E81A05A77700E6E8E6 /* View.xib */,
 			);
 			path = scratch;
@@ -417,6 +422,7 @@
 				9ACAF6151F8DDF1700F5C207 /* main.cpp in Sources */,
 				9A304B9A1EF47B60000DE8DA /* tss_null.cpp in Sources */,
 				9A304B991EF47B60000DE8DA /* thread.cpp in Sources */,
+				9ABE7AA6200EB8CA00CF93AE /* code.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -527,7 +533,10 @@
 				HEADER_SEARCH_PATHS = "\"$(SRCROOT)/includes\"";
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_CPLUSPLUSFLAGS = "$(OTHER_CFLAGS)";
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-fcoroutines-ts",
+				);
 				SDKROOT = macosx;
 				VALID_ARCHS = x86_64;
 			};
@@ -569,7 +578,10 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = "\"$(SRCROOT)/includes\"";
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
-				OTHER_CPLUSPLUSFLAGS = "$(OTHER_CFLAGS)";
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(OTHER_CFLAGS)",
+					"-fcoroutines-ts",
+				);
 				SDKROOT = macosx;
 				VALID_ARCHS = x86_64;
 			};
@@ -591,7 +603,6 @@
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-ftemplate-backtrace-limit=0",
-					"-std=c++1z",
 					"-Xclang",
 					"-analyzer-checker",
 					"-Xclang",
@@ -621,7 +632,6 @@
 				OTHER_CPLUSPLUSFLAGS = (
 					"$(OTHER_CFLAGS)",
 					"-ftemplate-backtrace-limit=0",
-					"-std=c++1z",
 					"-Xclang",
 					"-analyzer-checker",
 					"-Xclang",
