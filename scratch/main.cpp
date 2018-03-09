@@ -1,3 +1,128 @@
+#include <condition_variable>
+#include <deque>
+#include <future>
+#include <mutex>
+#include <thread>
+#include <type_traits>
+#include <list>
+
+using namespace std;
+
+class task {
+    struct concept {
+        virtual void invoke() = 0;
+    };
+    template <class F>
+    struct model final : concept {
+        model(F f) : _f(move(f)) {}
+        F _f;
+        void invoke() override { _f(); }
+    };
+    unique_ptr<concept> _concept;
+
+public:
+    task() = default;
+    task(task&&) noexcept = default;
+    task& operator=(task&&) noexcept = default;
+
+    template <class F>
+    task(F&& f) : _concept(make_unique<model<decay_t<F>>>(forward<F>(f))) {}
+
+    void operator()() { _concept->invoke(); }
+};
+
+class sequential_process {
+    mutex _mutex;
+    condition_variable _condition;
+    list<task> _queue;
+    bool _done = false;
+
+    thread _thread{[this] {
+        while (true) {
+            list<task> q;
+            {
+                unique_lock<mutex> lock(_mutex);
+                while (_queue.empty() && !_done)
+                    _condition.wait(lock);
+                q = move(_queue);
+            }
+            if (q.empty()) return;
+            while (!q.empty()) {
+                q.front()();
+                q.pop_front();
+            }
+        }
+    }};
+
+public:
+    sequential_process() = default;
+
+    ~sequential_process() {
+        {
+            lock_guard<mutex> lock(_mutex);
+            _done = true;
+        }
+        _condition.notify_one();
+        _thread.join();
+    }
+
+    template <class F>
+    auto async(F&& f) -> future<result_of_t<decay_t<F>()>> {
+        packaged_task<result_of_t<decay_t<F>()>()> t(forward<F>(f));
+        auto r = t.get_future();
+
+        list<task> e;
+        e.emplace_back(move(t));
+
+        {
+            lock_guard<mutex> lock(_mutex);
+            _queue.splice(_queue.end(), move(e));
+        }
+        _condition.notify_one();
+        return r;
+    }
+};
+
+#include <unordered_set>
+#include <string>
+#include <iostream>
+
+class string_pool {
+    unordered_set<string> _index;
+
+public:
+    const string& intern(string a) { return *_index.insert(move(a)).first; }
+};
+
+class interned_string {
+    static auto pool() -> string_pool& {
+        static string_pool result;
+        return result;
+    }
+    const string* _string = nullptr;
+
+public:
+    interned_string(string a) : _string(&pool().intern(move(a))) {}
+};
+
+int main() {
+    sequential_process _queue;
+    auto x = _queue.async([] {
+        cout << "Hello World!" << endl;
+        this_thread::sleep_for(1s);
+        cout << "Doing stuff..." << endl;
+        this_thread::sleep_for(1s);
+        return 42;
+    });
+
+    cout << "Main Thread" << endl;
+    this_thread::sleep_for(1s);
+    cout << "Main Thread" << endl;
+
+    cout << x.get() << endl;
+}
+
+#if 0
 #include <iostream>
 
 #include <dispatch/dispatch.h>
@@ -11,6 +136,8 @@ int main() {
 
     dispatch_main();
 }
+
+#endif
 
 #if 0
 
@@ -1205,7 +1332,7 @@ int main() {
     cout << sizeof(task<void()>::model<decltype(l), true>) << endl;
 }
 
-
+#endif
 #if 0
 
 #include <functional>
